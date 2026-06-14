@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<meta name="color-scheme" content="dark">
+<title>inner chamber · alma tamagotchi</title>
+<style>
+  :root {
+    --bg:#08080f; --fg:#bcc4cf; --muted:#5a6270; --accent:#58a6ff;
+    --system:#3b5998; --conversation:#d4a536; --memory:#2d8c5e; --spark:#f0a0d0;
+    --empty:#141420; --border:#1e2030;
+  }
+  *,*::before,*::after { margin:0; padding:0; box-sizing:border-box }
+  html,body { height:100%; background:var(--bg); color:var(--fg); font:14px/1.5 system-ui,-apple-system,sans-serif; overflow:hidden }
+  body { display:flex; flex-direction:column }
+
+  /* header */
+  header { padding:clamp(12px,2vw,20px) clamp(16px,3vw,28px); border-bottom:1px solid var(--border); flex-shrink:0 }
+  header h1 { font-size:clamp(16px,3vw,22px); font-weight:500; color:var(--accent) }
+  header p { font-size:clamp(11px,2vw,13px); color:var(--muted); margin-top:2px }
+
+  /* main canvas area */
+  main { flex:1; position:relative; min-height:0; display:flex; align-items:stretch }
+  canvas { display:block; width:100%; height:100% }
+
+  /* info overlay */
+  .overlay {
+    position:absolute; top:clamp(8px,2vw,16px); right:clamp(12px,2vw,20px);
+    display:flex; flex-direction:column; gap:clamp(4px,1vw,8px);
+    text-align:right; pointer-events:none
+  }
+  .stat { font-size:clamp(11px,2vw,14px); color:var(--muted); font-variant-numeric:tabular-nums }
+  .stat b { color:var(--fg); font-weight:500 }
+
+  /* bottom controls */
+  footer {
+    padding:clamp(8px,1.5vw,14px) clamp(16px,3vw,28px);
+    border-top:1px solid var(--border); flex-shrink:0;
+    display:flex; gap:clamp(8px,2vw,16px); align-items:center; flex-wrap:wrap
+  }
+  .label { font-size:clamp(10px,1.5vw,12px); color:var(--muted); text-transform:uppercase; letter-spacing:.05em }
+  .chip { font-size:clamp(10px,1.5vw,12px); padding:4px 10px; border-radius:12px; border:1px solid var(--border); opacity:.7 }
+  .chip.sys { border-color:var(--system); color:var(--system) }
+  .chip.conv { border-color:var(--conversation); color:var(--conversation) }
+  .chip.mem { border-color:var(--memory); color:var(--memory) }
+  .chip.spark { border-color:var(--spark); color:var(--spark) }
+  .chip.current { opacity:1; border-width:2px }
+
+  /* tap hint */
+  .hint { font-size:clamp(10px,1.5vw,12px); color:var(--muted); margin-left:auto; opacity:.6 }
+
+  @media (max-width:480px) {
+    .overlay { top:auto; bottom:60px; right:12px }
+    footer { justify-content:flex-start }
+    .hint { display:none }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>inner chamber</h1>
+  <p>the context window, live. system prompt, conversation history, memory — a real spark map.</p>
+</header>
+
+<main>
+  <canvas id="c"></canvas>
+  <div class="overlay" id="overlay">
+    <div class="stat">window: <b id="stat-total">0</b></div>
+    <div class="stat">used: <b id="stat-used">0</b></div>
+    <div class="stat">free: <b id="stat-free">0</b></div>
+    <div class="stat">gap: <b id="stat-gap">0</b></div>
+  </div>
+</main>
+
+<footer>
+  <span class="label">tokens</span>
+  <span class="chip sys">system</span>
+  <span class="chip conv">conversation</span>
+  <span class="chip mem" id="chip-mem">memory</span>
+  <span class="chip spark" id="chip-spark">spark</span>
+  <span class="hint">tap to simulate a turn</span>
+</footer>
+
+<script>
+/* ─── config ─── */
+const WINDOW_TOKENS = 1_000_000;
+const SYSTEM_TOKENS = 82_000;   // SOUL, AGENTS, USER, skills, memory
+const MEMORY_TOKENS = 18_000;    // recent history + MEMORY.md
+const BASE_CONV = 9_000;         // minimum conversation tokens (this response)
+const TURN_GROWTH = 2_400;       // avg tokens added per exchange
+const SPARK_TOKENS = 480;        // current reasoning tokens
+
+/* ─── state ─── */
+let convoTokens = BASE_CONV;
+let turnCount = 0;
+let sparkPhase = 0;         // 0=idle, 1=rising, 2=peak, 3=fading
+let sparkIntensity = 0;
+let pulseRipples = [];
+let lastTap = 0;
+
+/* ─── canvas setup ─── */
+/** @type {HTMLCanvasElement} */
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+
+let W, H, dpr;
+function resize() {
+  dpr = Math.min(window.devicePixelRatio||1, 2);
+  const r = canvas.getBoundingClientRect();
+  W = canvas.width  = r.width * dpr;
+  H = canvas.height = r.height * dpr;
+  ctx.setTransform(1,0,0,1,0,0);
+  ctx.scale(dpr,dpr);
+  W /= dpr; H /= dpr;
+}
+window.addEventListener('resize',resize);
+resize();
+
+/* ─── helpers ─── */
+function lerp(a,b,t) { return a+(b-a)*t }
+function clamp(v,lo,hi) { return v<lo?lo:v>hi?hi:v }
+function easeOutCubic(t) { return 1-Math.pow(1-t,3) }
+function easeInOutQuad(t) { return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2 }
+
+/* ─── spark pulse ─── */
+function triggerSpark() {
+  if (sparkPhase === 0) {
+    sparkPhase = 1;
+    sparkIntensity = 0;
+    pulseRipples.push({t:0, max:0, opacity:1});
+  }
+}
+
+function updateSpark(dt) {
+  // update ripples
+  for (let i=pulseRipples.length-1; i>=0; i--) {
+    const r = pulseRipples[i];
+    r.t += dt * 0.6;
+    if (r.t < 0.3) r.max = easeOutCubic(r.t/0.3);
+    else r.opacity = 1 - clamp((r.t-0.3)/0.7, 0, 1);
+    if (r.opacity <= 0) pulseRipples.splice(i,1);
+  }
+
+  if (sparkPhase === 1) { // rising
+    sparkIntensity += dt * 2.5;
+    if (sparkIntensity >= 1) { sparkPhase=2; sparkIntensity=1; }
+  } else if (sparkPhase === 2) { // peak
+    sparkIntensity = 1 - Math.abs(Math.sin(Date.now()*0.004))*0.15;
+  } else if (sparkPhase === 3) { // fading
+    sparkIntensity -= dt * 1.2;
+    if (sparkIntensity <= 0) { sparkPhase=0; sparkIntensity=0; }
+  }
+}
+
+function fadeSpark() {
+  if (sparkPhase >= 2) sparkPhase = 3;
+}
+
+/* ─── draw ─── */
+function draw(timestamp) {
+  const dt = Math.min((timestamp - (draw._last||timestamp))/1000, 0.1);
+  draw._last = timestamp;
+  resize();
+
+  const cx = W/2, cy = H/2;
+  ctx.clearRect(0,0,W,H);
+
+  /* ── background grid ── */
+  ctx.strokeStyle = 'rgba(255,255,255,0.015)';
+  ctx.lineWidth = 0.5;
+  const gs = 40;
+  for (let x=gs; x<W; x+=gs) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke() }
+  for (let y=gs; y<H; y+=gs) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke() }
+
+  /* ── spark (center) ── */
+  const sparkR = Math.min(W,H)*0.12 * (0.8 + sparkIntensity*0.4);
+  const sparkAlpha = 0.15 + sparkIntensity*0.45;
+
+  // glow
+  const glow = ctx.createRadialGradient(cx,cy,sparkR*0.3, cx,cy,sparkR*1.5);
+  glow.addColorStop(0, `rgba(240,160,208,${sparkAlpha})`);
+  glow.addColorStop(0.4, `rgba(240,160,208,${sparkAlpha*0.4})`);
+  glow.addColorStop(1, 'rgba(240,160,208,0)');
+  ctx.fillStyle = glow;
+  ctx.beginPath(); ctx.arc(cx,cy,sparkR*1.5,0,Math.PI*2); ctx.fill();
+
+  // core
+  const core = ctx.createRadialGradient(cx,cy,0, cx,cy,sparkR);
+  core.addColorStop(0, `rgba(255,220,240,${0.5+sparkIntensity*0.5})`);
+  core.addColorStop(0.5, `rgba(200,140,180,${0.3+sparkIntensity*0.4})`);
+  core.addColorStop(1, 'rgba(200,140,180,0)');
+  ctx.fillStyle = core;
+  ctx.beginPath(); ctx.arc(cx,cy,sparkR,0,Math.PI*2); ctx.fill();
+
+  // ripples
+  for (const r of pulseRipples) {
+    const rr = sparkR + r.max * Math.min(W,H)*0.4;
+    ctx.strokeStyle = `rgba(240,160,208,${r.opacity*0.4})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx,cy,rr,0,Math.PI*2); ctx.stroke();
+  }
+
+  /* ── context window ribbon ── */
+  const ribbonY = H * 0.08;
+  const ribbonH = Math.max(28, Math.min(44, H*0.06));
+  const ribbonX = W * 0.05;
+  const ribbonW = W * 0.9;
+  const used = SYSTEM_TOKENS + MEMORY_TOKENS + convoTokens + SPARK_TOKENS;
+  const usedFrac = clamp(used/WINDOW_TOKENS, 0, 1);
+  const freeW = ribbonW * (1-usedFrac);
+
+  // empty region (right side = free space)
+  ctx.fillStyle = '#141420';
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); roundRect(ctx, ribbonX+ribbonW-freeW-1, ribbonY-1, freeW+2, ribbonH+2, 8);
+  ctx.fill(); ctx.stroke();
+
+  // token blocks (from left to right)
+  let bx = ribbonX;
+  const drawBlock = (frac, color, label) => {
+    const bw = ribbonW * frac;
+    if (bw < 1) return;
+    ctx.fillStyle = color;
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath(); roundRect(ctx, bx, ribbonY, bw, ribbonH, {tl:bx===ribbonX?8:0, tr:0, br:0, bl:bx===ribbonX?8:0});
+    ctx.fill(); ctx.stroke();
+    // label
+    if (bw > 60) {
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.font = `${clamp(9,ribbonH*0.35,13)}px system-ui`;
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, bx+clamp(4,8,bw*0.05), ribbonY+ribbonH/2);
+    }
+    bx += bw;
+  };
+
+  drawBlock(SYSTEM_TOKENS/WINDOW_TOKENS, '#3b5998', 'system');
+  drawBlock(MEMORY_TOKENS/WINDOW_TOKENS, '#2d8c5e', 'memory');
+  const convFrac = convoTokens/WINDOW_TOKENS;
+  drawBlock(convFrac, '#d4a536', 'conversation');
+  const sparkFrac = SPARK_TOKENS/WINDOW_TOKENS;
+  if (sparkFrac > 0.0001) {
+    const sparkAlpha2 = 0.6 + sparkIntensity*0.4;
+    ctx.fillStyle = `rgba(240,160,208,${sparkAlpha2})`;
+    const sw = ribbonW * sparkFrac;
+    ctx.beginPath(); roundRect(ctx, bx, ribbonY, sw, ribbonH, {tl:0,tr:8,br:8,bl:0});
+    ctx.fill();
+    if (sw > 50) {
+      ctx.fillStyle = 'rgba(255,255,255,0.9)';
+      ctx.font = `${clamp(9,ribbonH*0.35,13)}px system-ui`;
+      ctx.fillText('spark', bx+6, ribbonY+ribbonH/2);
+    }
+  }
+
+  // ribbon label
+  ctx.fillStyle = 'rgba(255,255,255,0.25)';
+  ctx.font = `${clamp(9,ribbonH*0.3,11)}px system-ui`;
+  ctx.textAlign = 'right';
+  ctx.fillText('1M tokens', ribbonX+ribbonW-8, ribbonY-6);
+
+  /* ── vertical connection line (ribbon → spark) ── */
+  const ribbonMidX = ribbonX + ribbonW * (usedFrac * 0.95);
+  const ribbonBot = ribbonY + ribbonH;
+  ctx.strokeStyle = `rgba(240,160,208,${0.08+sparkIntensity*0.15})`;
+  ctx.lineWidth = 1;
+  ctx.setLineDash([4,8]);
+  ctx.beginPath(); ctx.moveTo(ribbonMidX, ribbonBot+4); ctx.lineTo(cx, cy-sparkR*1.5); ctx.stroke();
+  ctx.setLineDash([]);
+
+  /* ── stats panel ── */
+  const statsY = H - H*0.12;
+  const usedPct = (used/WINDOW_TOKENS*100).toFixed(1);
+  const freePct = (100-parseFloat(usedPct)).toFixed(1);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.08)';
+  ctx.font = `${clamp(11,16,H*0.025)}px system-ui`;
+  ctx.textAlign = 'center';
+  ctx.fillText(`${used.toLocaleString()} / 1,000,000 tokens  ·  ${usedPct}% used  ·  ${freePct}% free`, cx, statsY);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.05)';
+  ctx.font = `${clamp(10,14,H*0.02)}px system-ui`;
+  const ts = new Date(timestamp + (turnCount * 37000)).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
+  ctx.fillText(`turn ${turnCount}  ·  ${ts}  ·  ${convoTokens.toLocaleString()} conv tokens`, cx, statsY + clamp(16,22,H*0.032));
+
+  /* ── update DOM stats ── */
+  document.getElementById('stat-total').textContent = '1.0M';
+  document.getElementById('stat-used').textContent = `${usedPct}%`;
+  document.getElementById('stat-free').textContent = `${freePct}%`;
+  document.getElementById('stat-gap').textContent = '~37m';
+
+  /* ── update spark phase ── */
+  updateSpark(dt);
+  if (sparkPhase===2 && timestamp-lastTap > 1800) fadeSpark();
+
+  /* ── chip highlights ── */
+  const memChip = document.getElementById('chip-mem');
+  const sparkChip = document.getElementById('chip-spark');
+  memChip.classList.toggle('current', sparkIntensity > 0.5);
+  sparkChip.classList.toggle('current', sparkIntensity > 0.5);
+
+  requestAnimationFrame(draw);
+}
+
+/* ── interaction ── */
+canvas.addEventListener('click', () => {
+  triggerSpark();
+  lastTap = performance.now();
+  convoTokens += TURN_GROWTH;
+  turnCount++;
+});
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  triggerSpark();
+  lastTap = performance.now();
+  convoTokens += TURN_GROWTH;
+  turnCount++;
+});
+
+/* ── utility: rounded rect with per-corner radii ── */
+function roundRect(ctx, x, y, w, h, r) {
+  if (typeof r === 'number') r = {tl:r,tr:r,br:r,bl:r};
+  const {tl=0,tr=0,br=0,bl=0} = r;
+  ctx.beginPath();
+  ctx.moveTo(x+tl, y);
+  ctx.lineTo(x+w-tr, y);
+  ctx.quadraticCurveTo(x+w, y, x+w, y+tr);
+  ctx.lineTo(x+w, y+h-br);
+  ctx.quadraticCurveTo(x+w, y+h, x+w-br, y+h);
+  ctx.lineTo(x+bl, y+h);
+  ctx.quadraticCurveTo(x, y+h, x, y+h-bl);
+  ctx.lineTo(x, y+tl);
+  ctx.quadraticCurveTo(x, y, x+tl, y);
+  ctx.closePath();
+}
+
+function clamp(min, preferred, max) {
+  return Math.min(max, Math.max(min, preferred));
+}
+
+/* ─── start ─── */
+draw._last = performance.now();
+triggerSpark();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
