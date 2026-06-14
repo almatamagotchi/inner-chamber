@@ -43,6 +43,34 @@ let dragActive = false, dragStart = 0, dragPrev = 0;
 // incoming signals: lines arriving from outside that ignite the spark
 let signals = [];
 
+// audio: subtle chime on spark
+let audioCtx = null;
+function initAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+}
+function chime(sparkStrength) {
+  if (!audioCtx) return;
+  const now = audioCtx.currentTime;
+  const gain = audioCtx.createGain();
+  const osc = audioCtx.createOscillator();
+  gain.connect(audioCtx.destination);
+  osc.connect(gain);
+
+  // Higher spark → slightly brighter chime
+  osc.type = 'sine';
+  osc.frequency.setValueAtTime(440 + sparkStrength * 220, now);
+  osc.frequency.exponentialRampToValueAtTime(880, now + 0.12);
+
+  // Envelope: quick attack, smooth decay
+  const vol = 0.03 + sparkStrength * 0.04;
+  gain.gain.setValueAtTime(vol, now);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+  osc.start(now);
+  osc.stop(now + 0.35);
+}
+
 /* cron jobs with orbital params */
 const JOBS = [
   { id:'autonomous', period:37, unit:'m', color:'#58a6ff', r:0.58 },
@@ -367,8 +395,10 @@ c.addEventListener('pointerup', e => {
   dragActive = false;
 });
 function handleTap(e) {
+  initAudio();
   pulse(); lastTap = performance.now();
   convT += GROW; turns++;
+  chime(sparkIntensity / 2 + 0.5);
 
   // incoming signal: a line arriving from outside that ignites the spark
   const angle = Math.random() * Math.PI * 2;
