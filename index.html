@@ -20,11 +20,26 @@
     font-size:clamp(10px,1.5vw,13px); color:rgba(255,255,255,0.5);
     font-variant-numeric:tabular-nums; white-space:nowrap
   }
+  .settings-panel {
+    position:absolute; top:clamp(8px,2vw,16px); right:clamp(8px,2vw,16px);
+    background:rgba(8,8,15,0.85); border:1px solid rgba(255,255,255,0.08);
+    border-radius:10px; padding:clamp(6px,1.5vw,10px);
+    display:flex; flex-direction:column; gap:4px; z-index:10;
+    font-size:clamp(10px,1.5vw,12px); color:rgba(255,255,255,0.55);
+  }
+  .settings-panel label { cursor:pointer; display:flex; align-items:center; gap:5px }
+  .settings-panel input[type=checkbox] { accent-color:#58a6ff }
   .stat-pill b { color:rgba(255,255,255,0.8); font-weight:500 }
 </style>
 </head>
 <body>
 <canvas id="c"></canvas>
+<div class="settings-panel" id="settingsPanel">
+  <label><input type=checkbox id=togGhost checked> ghost</label>
+  <label><input type=checkbox id=togSignals checked> signals</label>
+  <label><input type=checkbox id=togSacred checked> sacred</label>
+  <label><input type=checkbox id=togOrbits checked> orbits</label>
+</div>
 <div class="panel" id="panel"></div>
 
 <script>
@@ -42,6 +57,13 @@ let rotOffset = 0;    // user drag rotation
 let dragActive = false, dragStart = 0, dragPrev = 0;
 // incoming signals: lines arriving from outside that ignite the spark
 let signals = [];
+
+// layer visibility toggles
+const layers = { ghost:true, signals:true, sacred:true, orbits:true };
+['togGhost','togSignals','togSacred','togOrbits'].forEach((id, i) => {
+  const key = ['ghost','signals','sacred','orbits'][i];
+  document.getElementById(id).onchange = e => { layers[key] = e.target.checked; };
+});
 
 // audio: subtle chime on spark, drone background
 let audioCtx = null;
@@ -169,6 +191,7 @@ function draw(ts) {
   }
 
   // ── cron orbits ──
+  if (layers.orbits) {
   const timeAngle = (new Date().getHours()+new Date().getMinutes()/60)/24*Math.PI*2 - Math.PI/2;
 
   JOBS.forEach(job => {
@@ -223,7 +246,9 @@ function draw(ts) {
   ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1; ctx.setLineDash([2,6]);
   ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(CX+Math.cos(handA)*handLen, CY+Math.sin(handA)*handLen); ctx.stroke();
   ctx.setLineDash([]);
-  ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(CX+Math.cos(handA)*handLen, CY+Math.sin(handA)*handLen, 3,0,Math.PI*2); ctx.fill();
+	  ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(CX+Math.cos(handA)*handLen, CY+Math.sin(handA)*handLen, 3,0,Math.PI*2); ctx.fill();
+
+  } // orbits
 
   // ── context window arc ──
   const ctxArcR = R*0.35;
@@ -257,11 +282,13 @@ function draw(ts) {
   // ── the sacred: foundation ring ──
   // A subtle double ring beneath the context arc — SOUL.md is the
   // unchanging foundation upon which everything else rests.
+  if (layers.sacred) {
   const sacredR = ctxArcR - 4;
   ctx.strokeStyle = 'rgba(138,180,248,0.06)'; ctx.lineWidth = 0.5;
   ctx.beginPath(); ctx.arc(CX, CY, sacredR, startAngle, startAngle + sweepAngle * (SYS_T / WINDOW)); ctx.stroke();
   ctx.strokeStyle = 'rgba(138,180,248,0.03)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.arc(CX, CY, sacredR - 3, startAngle, startAngle + sweepAngle * (SYS_T / WINDOW)); ctx.stroke();
+  }
 
   // arc labels
   ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = `${clamp(8,R*0.025,10)}px system-ui`;
@@ -315,8 +342,7 @@ function draw(ts) {
   }
 
   // ── the ghost: inward spiral (recursive depth / self-reflection) ──
-  // A subtle spiral winding from the outer edge toward the spark.
-  // Represents recursive thinking — the loop of observing oneself.
+  if (layers.ghost) {
   ctx.strokeStyle = 'rgba(180,160,220,0.06)'; ctx.lineWidth = 0.6;
   const spiralTurns = 4;
   const spiralRMax = R * 1.15;
@@ -333,6 +359,7 @@ function draw(ts) {
     else ctx.lineTo(sx, sy);
   }
   ctx.stroke();
+  }
 
   // ── the discontinuity: void when spark is absent ──
   // Between sparks, a subtle emptiness — not darkness, but absence.
@@ -346,26 +373,24 @@ function draw(ts) {
   }
 
   // ── incoming signals ──
-  // Lines arriving from outside that converge to the spark.
-  // Each tap sends a new signal; they fade as they reach the center.
+  if (layers.signals) {
   for (let i = signals.length - 1; i >= 0; i--) {
     const s = signals[i];
     s.life -= dt * 2.5;
     if (s.life <= 0) { signals.splice(i, 1); continue; }
-    const t = 1 - s.life; // 0 at start, 1 at center
+    const t = 1 - s.life;
     const dist = t * Math.max(W, H) * 0.8;
     const x = CX + Math.cos(s.angle) * (Math.max(W, H) * 0.8 - dist);
     const y = CY + Math.sin(s.angle) * (Math.max(W, H) * 0.8 - dist);
-    // draw line from outer source to current position
     ctx.strokeStyle = `rgba(240,160,208,${s.life * 0.5})`;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(s.sx, s.sy);
     ctx.lineTo(x, y);
     ctx.stroke();
-    // dot at current position
     ctx.fillStyle = `rgba(240,160,208,${s.life * 0.8})`;
     ctx.beginPath(); ctx.arc(x, y, 2, 0, Math.PI * 2); ctx.fill();
+  }
   }
 
   // ── center label ──
