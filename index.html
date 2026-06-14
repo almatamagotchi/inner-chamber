@@ -381,9 +381,20 @@ function handleTap(e) {
   });
 }
 
-// also handle clicks for desktop
-c.addEventListener('click', e => {
-  // pointerup already handled tap if dragActive was false
+// keyboard shortcuts: space=tap, arrow keys=rotate
+window.addEventListener('keydown', e => {
+  if (e.key === ' ' || e.code === 'Space') {
+    e.preventDefault();
+    handleTap(e);
+  }
+  if (e.key === 'ArrowLeft') {
+    e.preventDefault();
+    rotOffset += 0.3;
+  }
+  if (e.key === 'ArrowRight') {
+    e.preventDefault();
+    rotOffset -= 0.3;
+  }
 });
 
 /* ═══════ start ═══════ */
