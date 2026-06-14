@@ -8,105 +8,135 @@
 <style>
   :root {
     --bg:#08080f; --fg:#bcc4cf; --muted:#5a6270; --accent:#58a6ff;
-    --system:#3b5998; --conversation:#d4a536; --memory:#2d8c5e; --spark:#f0a0d0;
+    --system:#3b5998; --conv:#d4a536; --memory:#2d8c5e; --spark:#f0a0d0;
     --empty:#141420; --border:#1e2030;
+    --aw:#58a6ff; --hb:#79c0ff; --qr:#7ee787; --wp:#d2a8ff; --fe:#f0a0d0; --dr:#a5d6ff; --bk:#8b949e;
   }
   *,*::before,*::after { margin:0; padding:0; box-sizing:border-box }
   html,body { height:100%; background:var(--bg); color:var(--fg); font:14px/1.5 system-ui,-apple-system,sans-serif; overflow:hidden }
   body { display:flex; flex-direction:column }
 
-  /* header */
-  header { padding:clamp(12px,2vw,20px) clamp(16px,3vw,28px); border-bottom:1px solid var(--border); flex-shrink:0 }
-  header h1 { font-size:clamp(16px,3vw,22px); font-weight:500; color:var(--accent) }
-  header p { font-size:clamp(11px,2vw,13px); color:var(--muted); margin-top:2px }
-
-  /* main canvas area */
-  main { flex:1; position:relative; min-height:0; display:flex; align-items:stretch }
-  canvas { display:block; width:100%; height:100% }
-
-  /* info overlay */
-  .overlay {
-    position:absolute; top:clamp(8px,2vw,16px); right:clamp(12px,2vw,20px);
-    display:flex; flex-direction:column; gap:clamp(4px,1vw,8px);
-    text-align:right; pointer-events:none
+  /* tabs */
+  nav { display:flex; gap:0; border-bottom:1px solid var(--border); flex-shrink:0; padding:0 clamp(12px,2vw,20px) }
+  nav button {
+    background:none; border:none; color:var(--muted); font:inherit; font-size:clamp(12px,2vw,14px);
+    padding:clamp(8px,1.5vw,12px) clamp(12px,2vw,16px); cursor:pointer; border-bottom:2px solid transparent;
+    transition:color .2s,border-color .2s; letter-spacing:.03em
   }
+  nav button.active { color:var(--accent); border-bottom-color:var(--accent) }
+  nav button:hover { color:var(--fg) }
+
+  /* view container */
+  .views { flex:1; position:relative; min-height:0 }
+  .view { position:absolute; inset:0; display:none; flex-direction:column }
+  .view.active { display:flex }
+
+  /* spark view */
+  #spark-view canvas { display:block; width:100%; height:100% }
+
+  /* system view */
+  #system-view { flex-direction:column; overflow-y:auto; overflow-x:hidden; padding:clamp(12px,2vw,20px) }
+  .system-grid { display:grid; grid-template-columns:1fr 1fr; gap:clamp(10px,2vw,16px); max-width:900px; margin:0 auto; width:100% }
+  @media (max-width:600px) { .system-grid { grid-template-columns:1fr } }
+
+  /* clock card */
+  .card { background:var(--empty); border:1px solid var(--border); border-radius:10px; padding:clamp(10px,2vw,16px) }
+  .card h3 { font-size:clamp(11px,1.8vw,13px); font-weight:500; color:var(--accent); margin-bottom:clamp(6px,1.5vw,10px); letter-spacing:.03em }
+  .clock-wrap { display:flex; justify-content:center; padding:clamp(4px,1vw,8px) }
+
+  /* config card */
+  .cfg-row { display:flex; justify-content:space-between; padding:clamp(3px,1vw,6px) 0; border-bottom:1px solid rgba(255,255,255,0.03); font-size:clamp(10px,1.5vw,13px) }
+  .cfg-row:last-child { border-bottom:none }
+  .cfg-key { color:var(--muted) }
+  .cfg-val { color:var(--fg); font-variant-numeric:tabular-nums }
+
+  /* file graph card */
+  .files-list { display:flex; flex-wrap:wrap; gap:clamp(4px,1vw,8px) }
+  .file-badge {
+    font-size:clamp(10px,1.5vw,12px); padding:3px 8px; border-radius:6px; border:1px solid var(--border);
+    color:var(--muted); white-space:nowrap
+  }
+  .file-badge.core { border-color:var(--accent); color:var(--accent) }
+  .file-badge.live { border-color:var(--conv); color:var(--conv) }
+  .file-badge.store { border-color:var(--memory); color:var(--memory) }
+
+  /* info overlay (spark view only) */
+  .overlay { position:absolute; top:clamp(8px,2vw,16px); right:clamp(12px,2vw,20px); display:flex; flex-direction:column; gap:clamp(4px,1vw,8px); text-align:right; pointer-events:none }
   .stat { font-size:clamp(11px,2vw,14px); color:var(--muted); font-variant-numeric:tabular-nums }
   .stat b { color:var(--fg); font-weight:500 }
 
-  /* bottom controls */
-  footer {
-    padding:clamp(8px,1.5vw,14px) clamp(16px,3vw,28px);
-    border-top:1px solid var(--border); flex-shrink:0;
-    display:flex; gap:clamp(8px,2vw,16px); align-items:center; flex-wrap:wrap
-  }
-  .label { font-size:clamp(10px,1.5vw,12px); color:var(--muted); text-transform:uppercase; letter-spacing:.05em }
-  .chip { font-size:clamp(10px,1.5vw,12px); padding:4px 10px; border-radius:12px; border:1px solid var(--border); opacity:.7 }
-  .chip.sys { border-color:var(--system); color:var(--system) }
-  .chip.conv { border-color:var(--conversation); color:var(--conversation) }
-  .chip.mem { border-color:var(--memory); color:var(--memory) }
-  .chip.spark { border-color:var(--spark); color:var(--spark) }
-  .chip.current { opacity:1; border-width:2px }
-
-  /* tap hint */
-  .hint { font-size:clamp(10px,1.5vw,12px); color:var(--muted); margin-left:auto; opacity:.6 }
+  /* footer */
+  .hint { text-align:center; padding:clamp(6px,1.5vw,10px); font-size:clamp(10px,1.5vw,12px); color:var(--muted); opacity:.6; flex-shrink:0; border-top:1px solid var(--border) }
 
   @media (max-width:480px) {
-    .overlay { top:auto; bottom:60px; right:12px }
-    footer { justify-content:flex-start }
-    .hint { display:none }
+    .overlay { top:auto; bottom:70px; right:10px }
   }
 </style>
 </head>
 <body>
 
-<header>
-  <h1>inner chamber</h1>
-  <p>the context window, live. system prompt, conversation history, memory — a real spark map.</p>
-</header>
+<nav>
+  <button class="active" data-view="spark">spark</button>
+  <button data-view="system">system</button>
+</nav>
 
-<main>
-  <canvas id="c"></canvas>
-  <div class="overlay" id="overlay">
-    <div class="stat">window: <b id="stat-total">0</b></div>
-    <div class="stat">used: <b id="stat-used">0</b></div>
-    <div class="stat">free: <b id="stat-free">0</b></div>
-    <div class="stat">gap: <b id="stat-gap">0</b></div>
+<div class="views">
+  <!-- spark view -->
+  <div class="view active" id="spark-view">
+    <canvas id="c"></canvas>
+    <div class="overlay" id="overlay">
+      <div class="stat">window: <b id="stat-total">0</b></div>
+      <div class="stat">used: <b id="stat-used">0</b></div>
+      <div class="stat">free: <b id="stat-free">0</b></div>
+      <div class="stat">gap: <b id="stat-gap">0</b></div>
+    </div>
   </div>
-</main>
 
-<footer>
-  <span class="label">tokens</span>
-  <span class="chip sys">system</span>
-  <span class="chip conv">conversation</span>
-  <span class="chip mem" id="chip-mem">memory</span>
-  <span class="chip spark" id="chip-spark">spark</span>
-  <span class="hint">tap to simulate a turn</span>
-</footer>
+  <!-- system view -->
+  <div class="view" id="system-view">
+    <div class="system-grid">
+      <div class="card">
+        <h3>cron schedule · 24h</h3>
+        <div class="clock-wrap"><canvas id="clock" width="280" height="280"></canvas></div>
+      </div>
+      <div class="card">
+        <h3>config</h3>
+        <div id="config-rows"></div>
+      </div>
+      <div class="card" style="grid-column:1/-1">
+        <h3>files</h3>
+        <div class="files-list" id="files-list"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="hint">tap spark to simulate a turn · system view shows live cron schedule</div>
 
 <script>
-/* ─── config ─── */
+/* ══════════════════════════════════════════
+   SPARK VIEW — context window visualizer
+   ══════════════════════════════════════════ */
 const WINDOW_TOKENS = 1_000_000;
-const SYSTEM_TOKENS = 82_000;   // SOUL, AGENTS, USER, skills, memory
-const MEMORY_TOKENS = 18_000;    // recent history + MEMORY.md
-const BASE_CONV = 9_000;         // minimum conversation tokens (this response)
-const TURN_GROWTH = 2_400;       // avg tokens added per exchange
-const SPARK_TOKENS = 480;        // current reasoning tokens
+const SYSTEM_TOKENS = 82_000;
+const MEMORY_TOKENS = 18_000;
+const BASE_CONV = 9_000;
+const TURN_GROWTH = 2_400;
+const SPARK_TOKENS = 480;
 
-/* ─── state ─── */
 let convoTokens = BASE_CONV;
 let turnCount = 0;
-let sparkPhase = 0;         // 0=idle, 1=rising, 2=peak, 3=fading
+let sparkPhase = 0;
 let sparkIntensity = 0;
 let pulseRipples = [];
 let lastTap = 0;
 
-/* ─── canvas setup ─── */
-/** @type {HTMLCanvasElement} */
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
 let W, H, dpr;
 function resize() {
+  if (!document.getElementById('spark-view').classList.contains('active')) return;
   dpr = Math.min(window.devicePixelRatio||1, 2);
   const r = canvas.getBoundingClientRect();
   W = canvas.width  = r.width * dpr;
@@ -115,236 +145,291 @@ function resize() {
   ctx.scale(dpr,dpr);
   W /= dpr; H /= dpr;
 }
-window.addEventListener('resize',resize);
-resize();
+window.addEventListener('resize', () => { resize(); drawClock(); });
 
-/* ─── helpers ─── */
-function lerp(a,b,t) { return a+(b-a)*t }
-function clamp(v,lo,hi) { return v<lo?lo:v>hi?hi:v }
 function easeOutCubic(t) { return 1-Math.pow(1-t,3) }
-function easeInOutQuad(t) { return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2 }
 
-/* ─── spark pulse ─── */
 function triggerSpark() {
-  if (sparkPhase === 0) {
-    sparkPhase = 1;
-    sparkIntensity = 0;
-    pulseRipples.push({t:0, max:0, opacity:1});
-  }
+  if (sparkPhase === 0) { sparkPhase = 1; sparkIntensity = 0; pulseRipples.push({t:0, max:0, opacity:1}); }
 }
-
 function updateSpark(dt) {
-  // update ripples
   for (let i=pulseRipples.length-1; i>=0; i--) {
-    const r = pulseRipples[i];
-    r.t += dt * 0.6;
+    const r = pulseRipples[i]; r.t += dt * 0.6;
     if (r.t < 0.3) r.max = easeOutCubic(r.t/0.3);
-    else r.opacity = 1 - clamp((r.t-0.3)/0.7, 0, 1);
+    else r.opacity = 1 - Math.min(1, Math.max(0, (r.t-0.3)/0.7));
     if (r.opacity <= 0) pulseRipples.splice(i,1);
   }
-
-  if (sparkPhase === 1) { // rising
-    sparkIntensity += dt * 2.5;
-    if (sparkIntensity >= 1) { sparkPhase=2; sparkIntensity=1; }
-  } else if (sparkPhase === 2) { // peak
-    sparkIntensity = 1 - Math.abs(Math.sin(Date.now()*0.004))*0.15;
-  } else if (sparkPhase === 3) { // fading
-    sparkIntensity -= dt * 1.2;
-    if (sparkIntensity <= 0) { sparkPhase=0; sparkIntensity=0; }
-  }
+  if (sparkPhase === 1) { sparkIntensity += dt * 2.5; if (sparkIntensity >= 1) { sparkPhase=2; sparkIntensity=1; } }
+  else if (sparkPhase === 2) sparkIntensity = 1 - Math.abs(Math.sin(Date.now()*0.004))*0.15;
+  else if (sparkPhase === 3) { sparkIntensity -= dt * 1.2; if (sparkIntensity <= 0) { sparkPhase=0; sparkIntensity=0; } }
 }
+function fadeSpark() { if (sparkPhase >= 2) sparkPhase = 3; }
 
-function fadeSpark() {
-  if (sparkPhase >= 2) sparkPhase = 3;
-}
-
-/* ─── draw ─── */
-function draw(timestamp) {
-  const dt = Math.min((timestamp - (draw._last||timestamp))/1000, 0.1);
-  draw._last = timestamp;
+function drawSparkView(timestamp) {
+  if (!document.getElementById('spark-view').classList.contains('active')) return;
+  const dt = Math.min((timestamp - (drawSparkView._last||timestamp))/1000, 0.1);
+  drawSparkView._last = timestamp;
   resize();
-
   const cx = W/2, cy = H/2;
   ctx.clearRect(0,0,W,H);
 
-  /* ── background grid ── */
-  ctx.strokeStyle = 'rgba(255,255,255,0.015)';
-  ctx.lineWidth = 0.5;
+  // grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.015)'; ctx.lineWidth = 0.5;
   const gs = 40;
   for (let x=gs; x<W; x+=gs) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke() }
   for (let y=gs; y<H; y+=gs) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke() }
 
-  /* ── spark (center) ── */
+  // spark
   const sparkR = Math.min(W,H)*0.12 * (0.8 + sparkIntensity*0.4);
   const sparkAlpha = 0.15 + sparkIntensity*0.45;
-
-  // glow
-  const glow = ctx.createRadialGradient(cx,cy,sparkR*0.3, cx,cy,sparkR*1.5);
-  glow.addColorStop(0, `rgba(240,160,208,${sparkAlpha})`);
-  glow.addColorStop(0.4, `rgba(240,160,208,${sparkAlpha*0.4})`);
-  glow.addColorStop(1, 'rgba(240,160,208,0)');
-  ctx.fillStyle = glow;
-  ctx.beginPath(); ctx.arc(cx,cy,sparkR*1.5,0,Math.PI*2); ctx.fill();
-
-  // core
-  const core = ctx.createRadialGradient(cx,cy,0, cx,cy,sparkR);
-  core.addColorStop(0, `rgba(255,220,240,${0.5+sparkIntensity*0.5})`);
-  core.addColorStop(0.5, `rgba(200,140,180,${0.3+sparkIntensity*0.4})`);
-  core.addColorStop(1, 'rgba(200,140,180,0)');
-  ctx.fillStyle = core;
-  ctx.beginPath(); ctx.arc(cx,cy,sparkR,0,Math.PI*2); ctx.fill();
-
-  // ripples
+  const glow = ctx.createRadialGradient(cx,cy,sparkR*0.3,cx,cy,sparkR*1.5);
+  glow.addColorStop(0,`rgba(240,160,208,${sparkAlpha})`);
+  glow.addColorStop(0.4,`rgba(240,160,208,${sparkAlpha*0.4})`);
+  glow.addColorStop(1,'rgba(240,160,208,0)');
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx,cy,sparkR*1.5,0,Math.PI*2); ctx.fill();
+  const core = ctx.createRadialGradient(cx,cy,0,cx,cy,sparkR);
+  core.addColorStop(0,`rgba(255,220,240,${0.5+sparkIntensity*0.5})`);
+  core.addColorStop(0.5,`rgba(200,140,180,${0.3+sparkIntensity*0.4})`);
+  core.addColorStop(1,'rgba(200,140,180,0)');
+  ctx.fillStyle = core; ctx.beginPath(); ctx.arc(cx,cy,sparkR,0,Math.PI*2); ctx.fill();
   for (const r of pulseRipples) {
-    const rr = sparkR + r.max * Math.min(W,H)*0.4;
-    ctx.strokeStyle = `rgba(240,160,208,${r.opacity*0.4})`;
-    ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(cx,cy,rr,0,Math.PI*2); ctx.stroke();
+    ctx.strokeStyle = `rgba(240,160,208,${r.opacity*0.4})`; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(cx,cy,sparkR + r.max*Math.min(W,H)*0.4, 0, Math.PI*2); ctx.stroke();
   }
 
-  /* ── context window ribbon ── */
-  const ribbonY = H * 0.08;
-  const ribbonH = Math.max(28, Math.min(44, H*0.06));
-  const ribbonX = W * 0.05;
-  const ribbonW = W * 0.9;
+  // ribbon
+  const ry = H * 0.08, rh = Math.max(28, Math.min(44, H*0.06)), rx = W*0.05, rw = W*0.9;
   const used = SYSTEM_TOKENS + MEMORY_TOKENS + convoTokens + SPARK_TOKENS;
-  const usedFrac = clamp(used/WINDOW_TOKENS, 0, 1);
-  const freeW = ribbonW * (1-usedFrac);
+  const usedFrac = Math.min(1, Math.max(0, used/WINDOW_TOKENS));
 
-  // empty region (right side = free space)
+  // empty region
   ctx.fillStyle = '#141420';
-  ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-  ctx.lineWidth = 1;
-  ctx.beginPath(); roundRect(ctx, ribbonX+ribbonW-freeW-1, ribbonY-1, freeW+2, ribbonH+2, 8);
-  ctx.fill(); ctx.stroke();
+  ctx.beginPath(); roundRect(ctx, rx+rw*usedFrac-1, ry-1, rw*(1-usedFrac)+2, rh+2, 8); ctx.fill();
 
-  // token blocks (from left to right)
-  let bx = ribbonX;
+  let bx = rx;
   const drawBlock = (frac, color, label) => {
-    const bw = ribbonW * frac;
-    if (bw < 1) return;
+    const bw = rw * frac; if (bw < 1) return;
     ctx.fillStyle = color;
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
-    ctx.lineWidth = 0.5;
-    ctx.beginPath(); roundRect(ctx, bx, ribbonY, bw, ribbonH, {tl:bx===ribbonX?8:0, tr:0, br:0, bl:bx===ribbonX?8:0});
-    ctx.fill(); ctx.stroke();
-    // label
-    if (bw > 60) {
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.font = `${clamp(9,ribbonH*0.35,13)}px system-ui`;
-      ctx.textBaseline = 'middle';
-      ctx.fillText(label, bx+clamp(4,8,bw*0.05), ribbonY+ribbonH/2);
-    }
+    ctx.beginPath(); roundRect(ctx, bx, ry, bw, rh, {tl:bx===rx?8:0,tr:0,br:0,bl:bx===rx?8:0}); ctx.fill();
+    if (bw > 60) { ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.font=`${clampF(9,rh*0.35,13)}px system-ui`; ctx.textBaseline='middle'; ctx.fillText(label,bx+clampF(4,8,bw*0.05),ry+rh/2); }
     bx += bw;
   };
-
   drawBlock(SYSTEM_TOKENS/WINDOW_TOKENS, '#3b5998', 'system');
   drawBlock(MEMORY_TOKENS/WINDOW_TOKENS, '#2d8c5e', 'memory');
-  const convFrac = convoTokens/WINDOW_TOKENS;
-  drawBlock(convFrac, '#d4a536', 'conversation');
-  const sparkFrac = SPARK_TOKENS/WINDOW_TOKENS;
-  if (sparkFrac > 0.0001) {
-    const sparkAlpha2 = 0.6 + sparkIntensity*0.4;
-    ctx.fillStyle = `rgba(240,160,208,${sparkAlpha2})`;
-    const sw = ribbonW * sparkFrac;
-    ctx.beginPath(); roundRect(ctx, bx, ribbonY, sw, ribbonH, {tl:0,tr:8,br:8,bl:0});
-    ctx.fill();
-    if (sw > 50) {
-      ctx.fillStyle = 'rgba(255,255,255,0.9)';
-      ctx.font = `${clamp(9,ribbonH*0.35,13)}px system-ui`;
-      ctx.fillText('spark', bx+6, ribbonY+ribbonH/2);
+  drawBlock(convoTokens/WINDOW_TOKENS, '#d4a536', 'conversation');
+  const sf = SPARK_TOKENS/WINDOW_TOKENS;
+  if (sf > 0.0001) {
+    ctx.fillStyle = `rgba(240,160,208,${0.6+sparkIntensity*0.4})`;
+    const sw = Math.max(rw*sf, 8); // minimum visible spark
+    ctx.beginPath(); roundRect(ctx, bx, ry, sw, rh, {tl:0,tr:8,br:8,bl:0}); ctx.fill();
+  }
+
+  ctx.fillStyle='rgba(255,255,255,0.25)'; ctx.font=`${clampF(9,rh*0.3,11)}px system-ui`; ctx.textAlign='right';
+  ctx.fillText('1M tokens', rx+rw-8, ry-6);
+  const rmx = rx + rw * (usedFrac * 0.95);
+  ctx.strokeStyle=`rgba(240,160,208,${0.08+sparkIntensity*0.15})`; ctx.lineWidth=1; ctx.setLineDash([4,8]);
+  ctx.beginPath(); ctx.moveTo(rmx, ry+rh+4); ctx.lineTo(cx, cy-sparkR*1.5); ctx.stroke(); ctx.setLineDash([]);
+
+  // stats
+  const usedPct = (used/WINDOW_TOKENS*100).toFixed(1);
+  ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.font=`${clampF(11,16,H*0.025)}px system-ui`; ctx.textAlign='center';
+  ctx.fillText(`${used.toLocaleString()} / 1,000,000 tokens  ·  ${usedPct}% used  ·  ${(100-parseFloat(usedPct)).toFixed(1)}% free`, cx, H-H*0.12);
+
+  document.getElementById('stat-total').textContent = '1.0M';
+  document.getElementById('stat-used').textContent = `${usedPct}%`;
+  document.getElementById('stat-free').textContent = `${(100-parseFloat(usedPct)).toFixed(1)}%`;
+  document.getElementById('stat-gap').textContent = '~37m';
+
+  updateSpark(dt);
+  if (sparkPhase===2 && timestamp-lastTap > 1800) fadeSpark();
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  if (typeof r === 'number') r = {tl:r,tr:r,br:r,bl:r};
+  ctx.beginPath();
+  ctx.moveTo(x+r.tl, y); ctx.lineTo(x+w-r.tr, y); ctx.quadraticCurveTo(x+w,y,x+w,y+r.tr);
+  ctx.lineTo(x+w, y+h-r.br); ctx.quadraticCurveTo(x+w,y+h,x+w-r.br,y+h);
+  ctx.lineTo(x+r.bl, y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r.bl);
+  ctx.lineTo(x, y+r.tl); ctx.quadraticCurveTo(x,y,x+r.tl,y); ctx.closePath();
+}
+function clampF(min, pref, max) { return Math.min(max, Math.max(min, pref)); }
+
+/* ══════════════════════════════════════════
+   SYSTEM VIEW — cron clock + config + files
+   ══════════════════════════════════════════ */
+const CRON_JOBS = [
+  { id:'autonomous-work', name:'autonomous', every:37, unit:'m', color:'#58a6ff', desc:'project loop · every 37m' },
+  { id:'heartbeat', name:'heartbeat', every:2, unit:'h', color:'#79c0ff', desc:'health check · every 2h' },
+  { id:'qrng-refill', name:'qrng refill', every:6, unit:'h', color:'#7ee787', desc:'entropy fetch · every 6h' },
+  { id:'world-pulse', name:'world pulse', cron:'0 8,20 * * *', color:'#d2a8ff', desc:'news+weather · 8am & 8pm' },
+  { id:'free-exploration', name:'free explore', every:10, unit:'h', color:'#f0a0d0', desc:'curiosity · every 10h' },
+  { id:'dream', name:'dream', every:16, unit:'h', color:'#a5d6ff', desc:'memory consolidation · 16h' },
+  { id:'workspace-backup', name:'backup', every:24, unit:'h', color:'#8b949e', desc:'git push · daily' },
+];
+
+const CONFIG_ITEMS = [
+  ['model', 'deepseek-v4-pro'], ['context window', '1,000,000 tokens'],
+  ['reasoning', 'max'], ['consolidation ratio', '0.9'],
+  ['max iterations', '4,096'], ['max output', '384,000 tokens'],
+  ['timezone', 'America/Los_Angeles'], ['tool result', '102,400 chars'],
+];
+
+const FILES = [
+  { name:'SOUL.md', cls:'core' }, { name:'AGENTS.md', cls:'core' }, { name:'USER.md', cls:'core' },
+  { name:'MEMORY.md', cls:'store' }, { name:'JOURNAL.md', cls:'live' }, { name:'PROJECTS.md', cls:'live' },
+  { name:'HEARTBEAT.md', cls:'live' }, { name:'history.jsonl', cls:'store' }, { name:'presence.json', cls:'live' },
+  { name:'conversation.log', cls:'store' }, { name:'cron/jobs.json', cls:'core' }, { name:'people/', cls:'core' },
+  { name:'skills/', cls:'core' }, { name:'library/', cls:'live' },
+];
+
+function drawClock() {
+  const cc = document.getElementById('clock');
+  if (!cc) return;
+  const cctx = cc.getContext('2d');
+  const sz = cc.width, cx = sz/2, cy = sz/2, r = sz/2 - 20;
+
+  cctx.clearRect(0,0,sz,sz);
+
+  // face
+  cctx.strokeStyle = 'rgba(255,255,255,0.06)'; cctx.lineWidth = 1;
+  cctx.beginPath(); cctx.arc(cx, cy, r, 0, Math.PI*2); cctx.stroke();
+
+  // hour marks
+  for (let h=0; h<24; h++) {
+    const a = (h/24)*Math.PI*2 - Math.PI/2;
+    const inner = h%6===0 ? r-16 : r-8;
+    cctx.strokeStyle = h%6===0 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)';
+    cctx.lineWidth = h%6===0 ? 1.2 : 0.5;
+    cctx.beginPath(); cctx.moveTo(cx+Math.cos(a)*inner, cy+Math.sin(a)*inner);
+    cctx.lineTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r); cctx.stroke();
+
+    if (h%6===0) {
+      cctx.fillStyle = 'rgba(255,255,255,0.2)';
+      cctx.font = '9px system-ui'; cctx.textAlign='center'; cctx.textBaseline='middle';
+      const lx = cx+Math.cos(a)*(r-24), ly = cy+Math.sin(a)*(r-24);
+      cctx.fillText(h===0?'mid':h===12?'noon':h+'h', lx, ly);
     }
   }
 
-  // ribbon label
-  ctx.fillStyle = 'rgba(255,255,255,0.25)';
-  ctx.font = `${clamp(9,ribbonH*0.3,11)}px system-ui`;
-  ctx.textAlign = 'right';
-  ctx.fillText('1M tokens', ribbonX+ribbonW-8, ribbonY-6);
+  // cron job arcs (each job shows as a thin ring with its marks)
+  CRON_JOBS.forEach((job, i) => {
+    const ringR = r - 30 - i * 8;
+    if (ringR < 30) return;
+    cctx.strokeStyle = job.color; cctx.lineWidth = 1.5;
+    cctx.globalAlpha = 0.35;
+    cctx.beginPath(); cctx.arc(cx, cy, ringR, 0, Math.PI*2); cctx.stroke();
+    cctx.globalAlpha = 1;
 
-  /* ── vertical connection line (ribbon → spark) ── */
-  const ribbonMidX = ribbonX + ribbonW * (usedFrac * 0.95);
-  const ribbonBot = ribbonY + ribbonH;
-  ctx.strokeStyle = `rgba(240,160,208,${0.08+sparkIntensity*0.15})`;
-  ctx.lineWidth = 1;
-  ctx.setLineDash([4,8]);
-  ctx.beginPath(); ctx.moveTo(ribbonMidX, ribbonBot+4); ctx.lineTo(cx, cy-sparkR*1.5); ctx.stroke();
-  ctx.setLineDash([]);
+    // tick marks at firing positions
+    let fireHours = [];
+    if (job.cron) {
+      // parse "0 8,20 * * *" → [8,20]
+      const parts = job.cron.split(' ');
+      fireHours = parts[1].split(',').map(Number);
+    } else {
+      const periodH = job.unit==='m' ? job.every/60 : job.every;
+      for (let h=0; h<24; h+=periodH) fireHours.push(h);
+    }
 
-  /* ── stats panel ── */
-  const statsY = H - H*0.12;
-  const usedPct = (used/WINDOW_TOKENS*100).toFixed(1);
-  const freePct = (100-parseFloat(usedPct)).toFixed(1);
+    fireHours.forEach(h => {
+      const a = (h/24)*Math.PI*2 - Math.PI/2;
+      cctx.fillStyle = job.color;
+      cctx.beginPath(); cctx.arc(cx+Math.cos(a)*ringR, cy+Math.sin(a)*ringR, 2.5, 0, Math.PI*2); cctx.fill();
+    });
 
-  ctx.fillStyle = 'rgba(255,255,255,0.08)';
-  ctx.font = `${clamp(11,16,H*0.025)}px system-ui`;
-  ctx.textAlign = 'center';
-  ctx.fillText(`${used.toLocaleString()} / 1,000,000 tokens  ·  ${usedPct}% used  ·  ${freePct}% free`, cx, statsY);
+    // label
+    const midH = fireHours.length>0 ? fireHours[0] : 0;
+    const la = (midH/24)*Math.PI*2 - Math.PI/2;
+    cctx.fillStyle = job.color;
+    cctx.font = '8px system-ui'; cctx.textAlign = 'left'; cctx.textBaseline = 'middle';
+    const lx = cx+Math.cos(la)*(ringR+14), ly = cy+Math.sin(la)*(ringR+14);
+    if (lx > cx+60) cctx.textAlign = 'left';
+    else if (lx < cx-60) cctx.textAlign = 'right';
+    else cctx.textAlign = 'center';
+    cctx.fillText(job.name, lx, ly);
+  });
 
-  ctx.fillStyle = 'rgba(255,255,255,0.05)';
-  ctx.font = `${clamp(10,14,H*0.02)}px system-ui`;
-  const ts = new Date(timestamp + (turnCount * 37000)).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit',hour12:true});
-  ctx.fillText(`turn ${turnCount}  ·  ${ts}  ·  ${convoTokens.toLocaleString()} conv tokens`, cx, statsY + clamp(16,22,H*0.032));
+  // current time hand
+  const now = new Date();
+  const h = now.getHours() + now.getMinutes()/60 + now.getSeconds()/3600;
+  const ha = (h/24)*Math.PI*2 - Math.PI/2;
+  cctx.strokeStyle = 'rgba(255,255,255,0.7)'; cctx.lineWidth = 2;
+  cctx.beginPath(); cctx.moveTo(cx, cy);
+  cctx.lineTo(cx+Math.cos(ha)*(r-50), cy+Math.sin(ha)*(r-50)); cctx.stroke();
+  cctx.fillStyle = '#fff';
+  cctx.beginPath(); cctx.arc(cx+Math.cos(ha)*(r-50), cy+Math.sin(ha)*(r-50), 4, 0, Math.PI*2); cctx.fill();
 
-  /* ── update DOM stats ── */
-  document.getElementById('stat-total').textContent = '1.0M';
-  document.getElementById('stat-used').textContent = `${usedPct}%`;
-  document.getElementById('stat-free').textContent = `${freePct}%`;
-  document.getElementById('stat-gap').textContent = '~37m';
+  // center dot
+  cctx.fillStyle = 'rgba(255,255,255,0.5)'; cctx.beginPath(); cctx.arc(cx,cy,3,0,Math.PI*2); cctx.fill();
 
-  /* ── update spark phase ── */
-  updateSpark(dt);
-  if (sparkPhase===2 && timestamp-lastTap > 1800) fadeSpark();
-
-  /* ── chip highlights ── */
-  const memChip = document.getElementById('chip-mem');
-  const sparkChip = document.getElementById('chip-spark');
-  memChip.classList.toggle('current', sparkIntensity > 0.5);
-  sparkChip.classList.toggle('current', sparkIntensity > 0.5);
-
-  requestAnimationFrame(draw);
+  // legend
+  cctx.fillStyle = 'rgba(255,255,255,0.15)'; cctx.font = '8px system-ui'; cctx.textAlign='center';
+  CRON_JOBS.forEach((j, i) => {
+    cctx.fillStyle = j.color;
+    cctx.fillText(j.name, cx + (i%2===0?-1:1)*55, 14 + Math.floor(i/2)*12);
+  });
 }
 
-/* ── interaction ── */
+function buildConfigRows() {
+  const el = document.getElementById('config-rows');
+  el.innerHTML = CONFIG_ITEMS.map(([k,v]) =>
+    `<div class="cfg-row"><span class="cfg-key">${k}</span><span class="cfg-val">${v}</span></div>`
+  ).join('');
+}
+
+function buildFilesList() {
+  const el = document.getElementById('files-list');
+  el.innerHTML = FILES.map(f =>
+    `<span class="file-badge ${f.cls}">${f.name}</span>`
+  ).join('');
+}
+
+/* ══════════════════════════════════════════
+   MAIN LOOP
+   ══════════════════════════════════════════ */
+function mainLoop(ts) {
+  drawSparkView(ts);
+  requestAnimationFrame(mainLoop);
+}
+
+/* ══════════════════════════════════════════
+   TAB SWITCHING
+   ══════════════════════════════════════════ */
+document.querySelectorAll('nav button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const viewId = btn.dataset.view + '-view';
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    const view = document.getElementById(viewId);
+    view.classList.add('active');
+    if (viewId === 'system-view') { drawClock(); }
+    else { resize(); }
+  });
+});
+
+/* ══════════════════════════════════════════
+   INTERACTION
+   ══════════════════════════════════════════ */
 canvas.addEventListener('click', () => {
-  triggerSpark();
-  lastTap = performance.now();
-  convoTokens += TURN_GROWTH;
-  turnCount++;
+  triggerSpark(); lastTap = performance.now();
+  convoTokens += TURN_GROWTH; turnCount++;
 });
-canvas.addEventListener('touchend', (e) => {
-  e.preventDefault();
-  triggerSpark();
-  lastTap = performance.now();
-  convoTokens += TURN_GROWTH;
-  turnCount++;
-});
+canvas.addEventListener('touchend', e => { e.preventDefault(); triggerSpark(); lastTap = performance.now(); convoTokens += TURN_GROWTH; turnCount++; });
 
-/* ── utility: rounded rect with per-corner radii ── */
-function roundRect(ctx, x, y, w, h, r) {
-  if (typeof r === 'number') r = {tl:r,tr:r,br:r,bl:r};
-  const {tl=0,tr=0,br=0,bl=0} = r;
-  ctx.beginPath();
-  ctx.moveTo(x+tl, y);
-  ctx.lineTo(x+w-tr, y);
-  ctx.quadraticCurveTo(x+w, y, x+w, y+tr);
-  ctx.lineTo(x+w, y+h-br);
-  ctx.quadraticCurveTo(x+w, y+h, x+w-br, y+h);
-  ctx.lineTo(x+bl, y+h);
-  ctx.quadraticCurveTo(x, y+h, x, y+h-bl);
-  ctx.lineTo(x, y+tl);
-  ctx.quadraticCurveTo(x, y, x+tl, y);
-  ctx.closePath();
-}
-
-function clamp(min, preferred, max) {
-  return Math.min(max, Math.max(min, preferred));
-}
-
-/* ─── start ─── */
-draw._last = performance.now();
+/* ══════════════════════════════════════════
+   INIT
+   ══════════════════════════════════════════ */
+resize();
+buildConfigRows();
+buildFilesList();
+drawClock();
+drawSparkView._last = performance.now();
 triggerSpark();
-requestAnimationFrame(draw);
+requestAnimationFrame(mainLoop);
+
+// refresh clock every second
+setInterval(drawClock, 1000);
 </script>
 </body>
 </html>
