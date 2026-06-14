@@ -83,6 +83,9 @@ const layers = { ghost:true, signals:true, sacred:true, orbits:true };
   document.getElementById(id).onchange = e => { layers[key] = e.target.checked; };
 });
 
+// sacred ring pulse: triggers when convT crosses a threshold
+let sacredPulse = 0, lastMilestone = 0;
+
 // audio: subtle chime on spark, drone background
 let audioCtx = null;
 let droneOsc = null, droneGain = null;
@@ -302,6 +305,14 @@ function draw(ts) {
   // unchanging foundation upon which everything else rests.
   if (layers.sacred) {
   const sacredR = ctxArcR - 4;
+  // pulse animation: briefly brightens and expands the sacred ring
+  if (sacredPulse > 0) {
+    sacredPulse = Math.max(0, sacredPulse - dt * 2);
+    const pulseR = sacredR - sacredPulse * 8;
+    const pulseAlpha = sacredPulse * 0.12;
+    ctx.strokeStyle = `rgba(138,180,248,${pulseAlpha})`; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(CX, CY, pulseR, startAngle, startAngle + sweepAngle * (SYS_T / WINDOW)); ctx.stroke();
+  }
   ctx.strokeStyle = 'rgba(138,180,248,0.06)'; ctx.lineWidth = 0.5;
   ctx.beginPath(); ctx.arc(CX, CY, sacredR, startAngle, startAngle + sweepAngle * (SYS_T / WINDOW)); ctx.stroke();
   ctx.strokeStyle = 'rgba(138,180,248,0.03)'; ctx.lineWidth = 1;
@@ -490,7 +501,13 @@ c.addEventListener('pointerup', e => {
 function handleTap(e) {
   initAudio();
   pulse(); lastTap = performance.now();
+  const prevMilestone = Math.floor(convT / 100000);
   convT += GROW; turns++;
+  const newMilestone = Math.floor(convT / 100000);
+  if (newMilestone > prevMilestone && newMilestone > lastMilestone) {
+    sacredPulse = 1;
+    lastMilestone = newMilestone;
+  }
   chime(sparkIntensity / 2 + 0.5);
 
   // incoming signal: a line arriving from outside that ignites the spark
