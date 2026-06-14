@@ -43,10 +43,22 @@ let dragActive = false, dragStart = 0, dragPrev = 0;
 // incoming signals: lines arriving from outside that ignite the spark
 let signals = [];
 
-// audio: subtle chime on spark
+// audio: subtle chime on spark, drone background
 let audioCtx = null;
+let droneOsc = null, droneGain = null;
 function initAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    // Start a subtle background drone — low sine, barely audible
+    droneGain = audioCtx.createGain();
+    droneOsc = audioCtx.createOscillator();
+    droneGain.gain.value = 0;
+    droneOsc.type = 'sine';
+    droneOsc.frequency.value = 44;
+    droneGain.connect(audioCtx.destination);
+    droneOsc.connect(droneGain);
+    droneOsc.start();
+  }
   if (audioCtx.state === 'suspended') audioCtx.resume();
 }
 function chime(sparkStrength) {
@@ -370,6 +382,16 @@ function draw(ts) {
 
   updateSpark(dt);
   if (sparkPhase===2 && ts-lastTap>1800) fade();
+
+  // ── drone: subtle background tone that deepens as conversation grows ──
+  // convT grows with turns; drone frequency descends, giving a sense of
+  // deepening thought over the course of a long interaction.
+  if (droneGain) {
+    const droneFreq = 60 - (convT / WINDOW) * 40; // 60 Hz → 20 Hz as convT→WINDOW
+    const droneVol = 0.003 + (convT / WINDOW) * 0.005; // subtle swell
+    droneOsc.frequency.setTargetAtTime(Math.max(20, droneFreq), audioCtx.currentTime, 0.5);
+    droneGain.gain.setTargetAtTime(droneVol, audioCtx.currentTime, 0.8);
+  }
 
   requestAnimationFrame(draw);
 }
