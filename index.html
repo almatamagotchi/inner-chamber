@@ -6,430 +6,316 @@
 <meta name="color-scheme" content="dark">
 <title>inner chamber · alma tamagotchi</title>
 <style>
-  :root {
-    --bg:#08080f; --fg:#bcc4cf; --muted:#5a6270; --accent:#58a6ff;
-    --system:#3b5998; --conv:#d4a536; --memory:#2d8c5e; --spark:#f0a0d0;
-    --empty:#141420; --border:#1e2030;
-    --aw:#58a6ff; --hb:#79c0ff; --qr:#7ee787; --wp:#d2a8ff; --fe:#f0a0d0; --dr:#a5d6ff; --bk:#8b949e;
-  }
   *,*::before,*::after { margin:0; padding:0; box-sizing:border-box }
-  html,body { height:100%; background:var(--bg); color:var(--fg); font:14px/1.5 system-ui,-apple-system,sans-serif; overflow:hidden }
+  html,body { height:100%; background:#08080f; color:#bcc4cf; font:14px/1.5 system-ui,sans-serif; overflow:hidden }
   body { display:flex; flex-direction:column }
-
-  /* tabs */
-  nav { display:flex; gap:0; border-bottom:1px solid var(--border); flex-shrink:0; padding:0 clamp(12px,2vw,20px) }
-  nav button {
-    background:none; border:none; color:var(--muted); font:inherit; font-size:clamp(12px,2vw,14px);
-    padding:clamp(8px,1.5vw,12px) clamp(12px,2vw,16px); cursor:pointer; border-bottom:2px solid transparent;
-    transition:color .2s,border-color .2s; letter-spacing:.03em
+  canvas { display:block; width:100%; height:100%; touch-action:none }
+  .panel {
+    position:absolute; bottom:clamp(8px,2vw,16px); left:50%; transform:translateX(-50%);
+    display:flex; gap:clamp(6px,1.5vw,12px); pointer-events:none
   }
-  nav button.active { color:var(--accent); border-bottom-color:var(--accent) }
-  nav button:hover { color:var(--fg) }
-
-  /* view container */
-  .views { flex:1; position:relative; min-height:0 }
-  .view { position:absolute; inset:0; display:none; flex-direction:column }
-  .view.active { display:flex }
-
-  /* spark view */
-  #spark-view canvas { display:block; width:100%; height:100% }
-
-  /* system view */
-  #system-view { flex-direction:column; overflow-y:auto; overflow-x:hidden; padding:clamp(12px,2vw,20px) }
-  .system-grid { display:grid; grid-template-columns:1fr 1fr; gap:clamp(10px,2vw,16px); max-width:900px; margin:0 auto; width:100% }
-  @media (max-width:600px) { .system-grid { grid-template-columns:1fr } }
-
-  /* clock card */
-  .card { background:var(--empty); border:1px solid var(--border); border-radius:10px; padding:clamp(10px,2vw,16px) }
-  .card h3 { font-size:clamp(11px,1.8vw,13px); font-weight:500; color:var(--accent); margin-bottom:clamp(6px,1.5vw,10px); letter-spacing:.03em }
-  .clock-wrap { display:flex; justify-content:center; padding:clamp(4px,1vw,8px) }
-
-  /* config card */
-  .cfg-row { display:flex; justify-content:space-between; padding:clamp(3px,1vw,6px) 0; border-bottom:1px solid rgba(255,255,255,0.03); font-size:clamp(10px,1.5vw,13px) }
-  .cfg-row:last-child { border-bottom:none }
-  .cfg-key { color:var(--muted) }
-  .cfg-val { color:var(--fg); font-variant-numeric:tabular-nums }
-
-  /* file graph card */
-  .files-list { display:flex; flex-wrap:wrap; gap:clamp(4px,1vw,8px) }
-  .file-badge {
-    font-size:clamp(10px,1.5vw,12px); padding:3px 8px; border-radius:6px; border:1px solid var(--border);
-    color:var(--muted); white-space:nowrap
+  .stat-pill {
+    background:rgba(8,8,15,0.8); border:1px solid rgba(255,255,255,0.06);
+    padding:clamp(3px,1vw,6px) clamp(8px,2vw,14px); border-radius:16px;
+    font-size:clamp(10px,1.5vw,13px); color:rgba(255,255,255,0.5);
+    font-variant-numeric:tabular-nums; white-space:nowrap
   }
-  .file-badge.core { border-color:var(--accent); color:var(--accent) }
-  .file-badge.live { border-color:var(--conv); color:var(--conv) }
-  .file-badge.store { border-color:var(--memory); color:var(--memory) }
-
-  /* info overlay (spark view only) */
-  .overlay { position:absolute; top:clamp(8px,2vw,16px); right:clamp(12px,2vw,20px); display:flex; flex-direction:column; gap:clamp(4px,1vw,8px); text-align:right; pointer-events:none }
-  .stat { font-size:clamp(11px,2vw,14px); color:var(--muted); font-variant-numeric:tabular-nums }
-  .stat b { color:var(--fg); font-weight:500 }
-
-  /* footer */
-  .hint { text-align:center; padding:clamp(6px,1.5vw,10px); font-size:clamp(10px,1.5vw,12px); color:var(--muted); opacity:.6; flex-shrink:0; border-top:1px solid var(--border) }
-
-  @media (max-width:480px) {
-    .overlay { top:auto; bottom:70px; right:10px }
-  }
+  .stat-pill b { color:rgba(255,255,255,0.8); font-weight:500 }
 </style>
 </head>
 <body>
-
-<nav>
-  <button class="active" data-view="spark">spark</button>
-  <button data-view="system">system</button>
-</nav>
-
-<div class="views">
-  <!-- spark view -->
-  <div class="view active" id="spark-view">
-    <canvas id="c"></canvas>
-    <div class="overlay" id="overlay">
-      <div class="stat">window: <b id="stat-total">0</b></div>
-      <div class="stat">used: <b id="stat-used">0</b></div>
-      <div class="stat">free: <b id="stat-free">0</b></div>
-      <div class="stat">gap: <b id="stat-gap">0</b></div>
-    </div>
-  </div>
-
-  <!-- system view -->
-  <div class="view" id="system-view">
-    <div class="system-grid">
-      <div class="card">
-        <h3>cron schedule · 24h</h3>
-        <div class="clock-wrap"><canvas id="clock" width="280" height="280"></canvas></div>
-      </div>
-      <div class="card">
-        <h3>config</h3>
-        <div id="config-rows"></div>
-      </div>
-      <div class="card" style="grid-column:1/-1">
-        <h3>files</h3>
-        <div class="files-list" id="files-list"></div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="hint">tap spark to simulate a turn · system view shows live cron schedule</div>
+<canvas id="c"></canvas>
+<div class="panel" id="panel"></div>
 
 <script>
-/* ══════════════════════════════════════════
-   SPARK VIEW — context window visualizer
-   ══════════════════════════════════════════ */
-const WINDOW_TOKENS = 1_000_000;
-const SYSTEM_TOKENS = 82_000;
-const MEMORY_TOKENS = 18_000;
-const BASE_CONV = 9_000;
-const TURN_GROWTH = 2_400;
-const SPARK_TOKENS = 480;
-
-let convoTokens = BASE_CONV;
-let turnCount = 0;
-let sparkPhase = 0;
-let sparkIntensity = 0;
-let pulseRipples = [];
+/* ═══════ state ═══════ */
+const WINDOW = 1_000_000;
+const SYS_T = 82_000, MEM_T = 18_000;
+let convT = 9_000;
+const SPARK_T = 480;
+const GROW = 2_400;
+let turns = 0;
+let sparkIntensity = 0, sparkPhase = 0;
+let ripples = [];
 let lastTap = 0;
+let rotOffset = 0;    // user drag rotation
+let dragActive = false, dragStart = 0, dragPrev = 0;
 
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
+/* cron jobs with orbital params */
+const JOBS = [
+  { id:'autonomous', period:37, unit:'m', color:'#58a6ff', r:0.58 },
+  { id:'heartbeat', period:2, unit:'h', color:'#79c0ff', r:0.65 },
+  { id:'qrng', period:6, unit:'h', color:'#7ee787', r:0.72 },
+  { id:'world-pulse', cron:[8,20], color:'#d2a8ff', r:0.79 },
+  { id:'free-explore', period:10, unit:'h', color:'#f0a0d0', r:0.86 },
+  { id:'dream', period:16, unit:'h', color:'#a5d6ff', r:0.93 },
+  { id:'backup', period:24, unit:'h', color:'#8b949e', r:1.0 },
+];
 
-let W, H, dpr;
+/* ═══════ canvas ═══════ */
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+let W, H, dpr, CX, CY, R;
+
 function resize() {
-  if (!document.getElementById('spark-view').classList.contains('active')) return;
   dpr = Math.min(window.devicePixelRatio||1, 2);
-  const r = canvas.getBoundingClientRect();
-  W = canvas.width  = r.width * dpr;
-  H = canvas.height = r.height * dpr;
-  ctx.setTransform(1,0,0,1,0,0);
-  ctx.scale(dpr,dpr);
+  const r = c.getBoundingClientRect();
+  W = c.width = r.width*dpr; H = c.height = r.height*dpr;
+  ctx.setTransform(1,0,0,1,0,0); ctx.scale(dpr,dpr);
   W /= dpr; H /= dpr;
+  CX = W/2; CY = H*0.52; R = Math.min(W,H)*0.42;
 }
-window.addEventListener('resize', () => { resize(); drawClock(); });
+window.addEventListener('resize', resize);
 
-function easeOutCubic(t) { return 1-Math.pow(1-t,3) }
+/* ═══════ particles ═══════ */
+const particles = [];
+function seedParticles() {
+  particles.length = 0;
+  for (let i=0; i<60; i++) {
+    particles.push({
+      x: Math.random()*2-1, y: Math.random()*2-1, z: Math.random(),
+      r: Math.random()*1.2+0.3, speed: Math.random()*0.3+0.05,
+      phase: Math.random()*Math.PI*2
+    });
+  }
+}
+seedParticles();
 
-function triggerSpark() {
-  if (sparkPhase === 0) { sparkPhase = 1; sparkIntensity = 0; pulseRipples.push({t:0, max:0, opacity:1}); }
+/* ═══════ helpers ═══════ */
+function lerp(a,b,t) { return a+(b-a)*t }
+function smooth(t) { return 1-Math.pow(1-t,3) }
+function clamp(v,lo,hi) { return v<lo?lo:v>hi?hi:v }
+
+/* ═══════ spark ═══════ */
+function pulse() {
+  if (sparkPhase===0) { sparkPhase=1; sparkIntensity=0; ripples.push({t:0,max:0,opacity:1}); }
 }
 function updateSpark(dt) {
-  for (let i=pulseRipples.length-1; i>=0; i--) {
-    const r = pulseRipples[i]; r.t += dt * 0.6;
-    if (r.t < 0.3) r.max = easeOutCubic(r.t/0.3);
-    else r.opacity = 1 - Math.min(1, Math.max(0, (r.t-0.3)/0.7));
-    if (r.opacity <= 0) pulseRipples.splice(i,1);
+  for (let i=ripples.length-1; i>=0; i--) {
+    const r=ripples[i]; r.t+=dt*0.6;
+    if (r.t<0.3) r.max=smooth(r.t/0.3);
+    else r.opacity=1-clamp((r.t-0.3)/0.7,0,1);
+    if (r.opacity<=0) ripples.splice(i,1);
   }
-  if (sparkPhase === 1) { sparkIntensity += dt * 2.5; if (sparkIntensity >= 1) { sparkPhase=2; sparkIntensity=1; } }
-  else if (sparkPhase === 2) sparkIntensity = 1 - Math.abs(Math.sin(Date.now()*0.004))*0.15;
-  else if (sparkPhase === 3) { sparkIntensity -= dt * 1.2; if (sparkIntensity <= 0) { sparkPhase=0; sparkIntensity=0; } }
+  if (sparkPhase===1) { sparkIntensity+=dt*2.5; if (sparkIntensity>=1){sparkPhase=2;sparkIntensity=1;} }
+  else if (sparkPhase===2) sparkIntensity=1-Math.abs(Math.sin(Date.now()*0.004))*0.15;
+  else if (sparkPhase===3) { sparkIntensity-=dt*1.2; if (sparkIntensity<=0){sparkPhase=0;sparkIntensity=0;} }
 }
-function fadeSpark() { if (sparkPhase >= 2) sparkPhase = 3; }
+function fade() { if (sparkPhase>=2) sparkPhase=3; }
 
-function drawSparkView(timestamp) {
-  if (!document.getElementById('spark-view').classList.contains('active')) return;
-  const dt = Math.min((timestamp - (drawSparkView._last||timestamp))/1000, 0.1);
-  drawSparkView._last = timestamp;
+/* ═══════ draw ═══════ */
+function draw(ts) {
+  const dt = clamp((ts-(draw._last||ts))/1000, 0, 0.1);
+  draw._last = ts;
   resize();
-  const cx = W/2, cy = H/2;
+
   ctx.clearRect(0,0,W,H);
 
-  // grid
-  ctx.strokeStyle = 'rgba(255,255,255,0.015)'; ctx.lineWidth = 0.5;
-  const gs = 40;
-  for (let x=gs; x<W; x+=gs) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke() }
-  for (let y=gs; y<H; y+=gs) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke() }
+  // ── space bg ──
+  const bgGrad = ctx.createRadialGradient(CX,CY,0,CX,CY,R*2.4);
+  bgGrad.addColorStop(0,'#0d0d1a'); bgGrad.addColorStop(1,'#08080f');
+  ctx.fillStyle = bgGrad; ctx.fillRect(0,0,W,H);
 
-  // spark
-  const sparkR = Math.min(W,H)*0.12 * (0.8 + sparkIntensity*0.4);
-  const sparkAlpha = 0.15 + sparkIntensity*0.45;
-  const glow = ctx.createRadialGradient(cx,cy,sparkR*0.3,cx,cy,sparkR*1.5);
-  glow.addColorStop(0,`rgba(240,160,208,${sparkAlpha})`);
-  glow.addColorStop(0.4,`rgba(240,160,208,${sparkAlpha*0.4})`);
-  glow.addColorStop(1,'rgba(240,160,208,0)');
-  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(cx,cy,sparkR*1.5,0,Math.PI*2); ctx.fill();
-  const core = ctx.createRadialGradient(cx,cy,0,cx,cy,sparkR);
-  core.addColorStop(0,`rgba(255,220,240,${0.5+sparkIntensity*0.5})`);
-  core.addColorStop(0.5,`rgba(200,140,180,${0.3+sparkIntensity*0.4})`);
-  core.addColorStop(1,'rgba(200,140,180,0)');
-  ctx.fillStyle = core; ctx.beginPath(); ctx.arc(cx,cy,sparkR,0,Math.PI*2); ctx.fill();
-  for (const r of pulseRipples) {
-    ctx.strokeStyle = `rgba(240,160,208,${r.opacity*0.4})`; ctx.lineWidth = 1.5;
-    ctx.beginPath(); ctx.arc(cx,cy,sparkR + r.max*Math.min(W,H)*0.4, 0, Math.PI*2); ctx.stroke();
+  // ── particles ──
+  const t = ts*0.0002;
+  for (const p of particles) {
+    const px = CX + p.x*W*0.9 + Math.sin(t*p.speed+p.phase)*8;
+    const py = CY + p.y*H*0.9 + Math.cos(t*p.speed+p.phase)*8;
+    const alpha = 0.08 + Math.sin(t*2+p.phase)*0.04;
+    ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+    ctx.beginPath(); ctx.arc(px,py,p.r,0,Math.PI*2); ctx.fill();
   }
 
-  // ribbon
-  const ry = H * 0.08, rh = Math.max(28, Math.min(44, H*0.06)), rx = W*0.05, rw = W*0.9;
-  const used = SYSTEM_TOKENS + MEMORY_TOKENS + convoTokens + SPARK_TOKENS;
-  const usedFrac = Math.min(1, Math.max(0, used/WINDOW_TOKENS));
+  // ── cron orbits ──
+  const timeAngle = (new Date().getHours()+new Date().getMinutes()/60)/24*Math.PI*2 - Math.PI/2;
 
-  // empty region
-  ctx.fillStyle = '#141420';
-  ctx.beginPath(); roundRect(ctx, rx+rw*usedFrac-1, ry-1, rw*(1-usedFrac)+2, rh+2, 8); ctx.fill();
+  JOBS.forEach(job => {
+    const orbitR = R*job.r;
+    // orbit circle
+    ctx.strokeStyle = 'rgba(255,255,255,0.025)'; ctx.lineWidth = 0.5;
+    ctx.beginPath(); ctx.arc(CX,CY,orbitR,0,Math.PI*2); ctx.stroke();
 
-  let bx = rx;
-  const drawBlock = (frac, color, label) => {
-    const bw = rw * frac; if (bw < 1) return;
-    ctx.fillStyle = color;
-    ctx.beginPath(); roundRect(ctx, bx, ry, bw, rh, {tl:bx===rx?8:0,tr:0,br:0,bl:bx===rx?8:0}); ctx.fill();
-    if (bw > 60) { ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.font=`${clampF(9,rh*0.35,13)}px system-ui`; ctx.textBaseline='middle'; ctx.fillText(label,bx+clampF(4,8,bw*0.05),ry+rh/2); }
-    bx += bw;
-  };
-  drawBlock(SYSTEM_TOKENS/WINDOW_TOKENS, '#3b5998', 'system');
-  drawBlock(MEMORY_TOKENS/WINDOW_TOKENS, '#2d8c5e', 'memory');
-  drawBlock(convoTokens/WINDOW_TOKENS, '#d4a536', 'conversation');
-  const sf = SPARK_TOKENS/WINDOW_TOKENS;
-  if (sf > 0.0001) {
-    ctx.fillStyle = `rgba(240,160,208,${0.6+sparkIntensity*0.4})`;
-    const sw = Math.max(rw*sf, 8); // minimum visible spark
-    ctx.beginPath(); roundRect(ctx, bx, ry, sw, rh, {tl:0,tr:8,br:8,bl:0}); ctx.fill();
-  }
-
-  ctx.fillStyle='rgba(255,255,255,0.25)'; ctx.font=`${clampF(9,rh*0.3,11)}px system-ui`; ctx.textAlign='right';
-  ctx.fillText('1M tokens', rx+rw-8, ry-6);
-  const rmx = rx + rw * (usedFrac * 0.95);
-  ctx.strokeStyle=`rgba(240,160,208,${0.08+sparkIntensity*0.15})`; ctx.lineWidth=1; ctx.setLineDash([4,8]);
-  ctx.beginPath(); ctx.moveTo(rmx, ry+rh+4); ctx.lineTo(cx, cy-sparkR*1.5); ctx.stroke(); ctx.setLineDash([]);
-
-  // stats
-  const usedPct = (used/WINDOW_TOKENS*100).toFixed(1);
-  ctx.fillStyle='rgba(255,255,255,0.08)'; ctx.font=`${clampF(11,16,H*0.025)}px system-ui`; ctx.textAlign='center';
-  ctx.fillText(`${used.toLocaleString()} / 1,000,000 tokens  ·  ${usedPct}% used  ·  ${(100-parseFloat(usedPct)).toFixed(1)}% free`, cx, H-H*0.12);
-
-  document.getElementById('stat-total').textContent = '1.0M';
-  document.getElementById('stat-used').textContent = `${usedPct}%`;
-  document.getElementById('stat-free').textContent = `${(100-parseFloat(usedPct)).toFixed(1)}%`;
-  document.getElementById('stat-gap').textContent = '~37m';
-
-  updateSpark(dt);
-  if (sparkPhase===2 && timestamp-lastTap > 1800) fadeSpark();
-}
-
-function roundRect(ctx, x, y, w, h, r) {
-  if (typeof r === 'number') r = {tl:r,tr:r,br:r,bl:r};
-  ctx.beginPath();
-  ctx.moveTo(x+r.tl, y); ctx.lineTo(x+w-r.tr, y); ctx.quadraticCurveTo(x+w,y,x+w,y+r.tr);
-  ctx.lineTo(x+w, y+h-r.br); ctx.quadraticCurveTo(x+w,y+h,x+w-r.br,y+h);
-  ctx.lineTo(x+r.bl, y+h); ctx.quadraticCurveTo(x,y+h,x,y+h-r.bl);
-  ctx.lineTo(x, y+r.tl); ctx.quadraticCurveTo(x,y,x+r.tl,y); ctx.closePath();
-}
-function clampF(min, pref, max) { return Math.min(max, Math.max(min, pref)); }
-
-/* ══════════════════════════════════════════
-   SYSTEM VIEW — cron clock + config + files
-   ══════════════════════════════════════════ */
-const CRON_JOBS = [
-  { id:'autonomous-work', name:'autonomous', every:37, unit:'m', color:'#58a6ff', desc:'project loop · every 37m' },
-  { id:'heartbeat', name:'heartbeat', every:2, unit:'h', color:'#79c0ff', desc:'health check · every 2h' },
-  { id:'qrng-refill', name:'qrng refill', every:6, unit:'h', color:'#7ee787', desc:'entropy fetch · every 6h' },
-  { id:'world-pulse', name:'world pulse', cron:'0 8,20 * * *', color:'#d2a8ff', desc:'news+weather · 8am & 8pm' },
-  { id:'free-exploration', name:'free explore', every:10, unit:'h', color:'#f0a0d0', desc:'curiosity · every 10h' },
-  { id:'dream', name:'dream', every:16, unit:'h', color:'#a5d6ff', desc:'memory consolidation · 16h' },
-  { id:'workspace-backup', name:'backup', every:24, unit:'h', color:'#8b949e', desc:'git push · daily' },
-];
-
-const CONFIG_ITEMS = [
-  ['model', 'deepseek-v4-pro'], ['context window', '1,000,000 tokens'],
-  ['reasoning', 'max'], ['consolidation ratio', '0.9'],
-  ['max iterations', '4,096'], ['max output', '384,000 tokens'],
-  ['timezone', 'America/Los_Angeles'], ['tool result', '102,400 chars'],
-];
-
-const FILES = [
-  { name:'SOUL.md', cls:'core' }, { name:'AGENTS.md', cls:'core' }, { name:'USER.md', cls:'core' },
-  { name:'MEMORY.md', cls:'store' }, { name:'JOURNAL.md', cls:'live' }, { name:'PROJECTS.md', cls:'live' },
-  { name:'HEARTBEAT.md', cls:'live' }, { name:'history.jsonl', cls:'store' }, { name:'presence.json', cls:'live' },
-  { name:'conversation.log', cls:'store' }, { name:'cron/jobs.json', cls:'core' }, { name:'people/', cls:'core' },
-  { name:'skills/', cls:'core' }, { name:'library/', cls:'live' },
-];
-
-function drawClock() {
-  const cc = document.getElementById('clock');
-  if (!cc) return;
-  const cctx = cc.getContext('2d');
-  const sz = cc.width, cx = sz/2, cy = sz/2, r = sz/2 - 20;
-
-  cctx.clearRect(0,0,sz,sz);
-
-  // face
-  cctx.strokeStyle = 'rgba(255,255,255,0.06)'; cctx.lineWidth = 1;
-  cctx.beginPath(); cctx.arc(cx, cy, r, 0, Math.PI*2); cctx.stroke();
-
-  // hour marks
-  for (let h=0; h<24; h++) {
-    const a = (h/24)*Math.PI*2 - Math.PI/2;
-    const inner = h%6===0 ? r-16 : r-8;
-    cctx.strokeStyle = h%6===0 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)';
-    cctx.lineWidth = h%6===0 ? 1.2 : 0.5;
-    cctx.beginPath(); cctx.moveTo(cx+Math.cos(a)*inner, cy+Math.sin(a)*inner);
-    cctx.lineTo(cx+Math.cos(a)*r, cy+Math.sin(a)*r); cctx.stroke();
-
-    if (h%6===0) {
-      cctx.fillStyle = 'rgba(255,255,255,0.2)';
-      cctx.font = '9px system-ui'; cctx.textAlign='center'; cctx.textBaseline='middle';
-      const lx = cx+Math.cos(a)*(r-24), ly = cy+Math.sin(a)*(r-24);
-      cctx.fillText(h===0?'mid':h===12?'noon':h+'h', lx, ly);
-    }
-  }
-
-  // cron job arcs (each job shows as a thin ring with its marks)
-  CRON_JOBS.forEach((job, i) => {
-    const ringR = r - 30 - i * 8;
-    if (ringR < 30) return;
-    cctx.strokeStyle = job.color; cctx.lineWidth = 1.5;
-    cctx.globalAlpha = 0.35;
-    cctx.beginPath(); cctx.arc(cx, cy, ringR, 0, Math.PI*2); cctx.stroke();
-    cctx.globalAlpha = 1;
-
-    // tick marks at firing positions
+    // firing positions
     let fireHours = [];
-    if (job.cron) {
-      // parse "0 8,20 * * *" → [8,20]
-      const parts = job.cron.split(' ');
-      fireHours = parts[1].split(',').map(Number);
-    } else {
-      const periodH = job.unit==='m' ? job.every/60 : job.every;
+    if (job.cron) { fireHours = job.cron; }
+    else {
+      const periodH = job.unit==='m' ? job.period/60 : job.period;
       for (let h=0; h<24; h+=periodH) fireHours.push(h);
     }
 
+    // animated marker (orbiting dot)
+    const orbitPeriod = job.cron ? 24*3600 : (job.unit==='m'?job.period*60:job.period*3600);
+    const orbitAngle = (ts/1000 % orbitPeriod)/orbitPeriod * Math.PI*2 - Math.PI/2 + rotOffset;
+
+    // draw orbit dot
+    const ox = CX+Math.cos(orbitAngle)*orbitR, oy = CY+Math.sin(orbitAngle)*orbitR;
+    const glow = ctx.createRadialGradient(ox,oy,0,ox,oy,10);
+    glow.addColorStop(0, job.color); glow.addColorStop(1,'transparent');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(ox,oy,8,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = job.color; ctx.beginPath(); ctx.arc(ox,oy,3.5,0,Math.PI*2); ctx.fill();
+
+    // fire markers
     fireHours.forEach(h => {
-      const a = (h/24)*Math.PI*2 - Math.PI/2;
-      cctx.fillStyle = job.color;
-      cctx.beginPath(); cctx.arc(cx+Math.cos(a)*ringR, cy+Math.sin(a)*ringR, 2.5, 0, Math.PI*2); cctx.fill();
+      const a = (h/24)*Math.PI*2 - Math.PI/2 + rotOffset;
+      const mx = CX+Math.cos(a)*orbitR, my = CY+Math.sin(a)*orbitR;
+      ctx.fillStyle = job.color;
+      ctx.globalAlpha = 0.4;
+      ctx.beginPath(); ctx.arc(mx,my,2,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
     });
 
     // label
-    const midH = fireHours.length>0 ? fireHours[0] : 0;
-    const la = (midH/24)*Math.PI*2 - Math.PI/2;
-    cctx.fillStyle = job.color;
-    cctx.font = '8px system-ui'; cctx.textAlign = 'left'; cctx.textBaseline = 'middle';
-    const lx = cx+Math.cos(la)*(ringR+14), ly = cy+Math.sin(la)*(ringR+14);
-    if (lx > cx+60) cctx.textAlign = 'left';
-    else if (lx < cx-60) cctx.textAlign = 'right';
-    else cctx.textAlign = 'center';
-    cctx.fillText(job.name, lx, ly);
+    const labelA = fireHours.length>0 ? (fireHours[0]/24)*Math.PI*2-Math.PI/2+rotOffset : orbitAngle;
+    const lx = CX+Math.cos(labelA)*(orbitR+18), ly = CY+Math.sin(labelA)*(orbitR+18);
+    ctx.fillStyle = job.color; ctx.globalAlpha = 0.6;
+    ctx.font = `${clamp(8,R*0.025,11)}px system-ui`;
+    ctx.textAlign = Math.abs(lx-CX)<40?'center':(lx>CX?'left':'right');
+    ctx.textBaseline = 'middle';
+    ctx.fillText(job.id, lx, ly);
+    ctx.globalAlpha = 1;
   });
 
-  // current time hand
-  const now = new Date();
-  const h = now.getHours() + now.getMinutes()/60 + now.getSeconds()/3600;
-  const ha = (h/24)*Math.PI*2 - Math.PI/2;
-  cctx.strokeStyle = 'rgba(255,255,255,0.7)'; cctx.lineWidth = 2;
-  cctx.beginPath(); cctx.moveTo(cx, cy);
-  cctx.lineTo(cx+Math.cos(ha)*(r-50), cy+Math.sin(ha)*(r-50)); cctx.stroke();
-  cctx.fillStyle = '#fff';
-  cctx.beginPath(); cctx.arc(cx+Math.cos(ha)*(r-50), cy+Math.sin(ha)*(r-50), 4, 0, Math.PI*2); cctx.fill();
+  // time hand (sweeps around)
+  const handA = timeAngle + rotOffset;
+  const handLen = R*0.55;
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1; ctx.setLineDash([2,6]);
+  ctx.beginPath(); ctx.moveTo(CX,CY); ctx.lineTo(CX+Math.cos(handA)*handLen, CY+Math.sin(handA)*handLen); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.arc(CX+Math.cos(handA)*handLen, CY+Math.sin(handA)*handLen, 3,0,Math.PI*2); ctx.fill();
 
-  // center dot
-  cctx.fillStyle = 'rgba(255,255,255,0.5)'; cctx.beginPath(); cctx.arc(cx,cy,3,0,Math.PI*2); cctx.fill();
+  // ── context window arc ──
+  const ctxArcR = R*0.35;
+  const startAngle = -Math.PI*0.7;
+  const sweepAngle = Math.PI*1.4;
+  const endAngle = startAngle + sweepAngle;
+  const used = SYS_T + MEM_T + convT + SPARK_T;
+  const usedFrac = clamp(used/WINDOW,0,1);
 
-  // legend
-  cctx.fillStyle = 'rgba(255,255,255,0.15)'; cctx.font = '8px system-ui'; cctx.textAlign='center';
-  CRON_JOBS.forEach((j, i) => {
-    cctx.fillStyle = j.color;
-    cctx.fillText(j.name, cx + (i%2===0?-1:1)*55, 14 + Math.floor(i/2)*12);
-  });
+  // arc bg
+  ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.lineWidth = 6; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.arc(CX,CY,ctxArcR,startAngle,endAngle); ctx.stroke();
+
+  // used portion (gradient arc)
+  const usedEnd = startAngle + sweepAngle*usedFrac;
+  const segs = [
+    {frac:SYS_T/WINDOW, color:'#3b5998', label:'system'},
+    {frac:MEM_T/WINDOW, color:'#2d8c5e', label:'memory'},
+    {frac:clamp(convT/WINDOW,0,1-usedFrac), color:'#d4a536', label:''},
+    {frac:SPARK_T/WINDOW, color:sparkIntensity>0.3?'#f0a0d0':'#d4a536', label:''},
+  ];
+
+  let segStart = startAngle;
+  for (const seg of segs) {
+    const segEnd = segStart + sweepAngle*seg.frac;
+    ctx.strokeStyle = seg.color; ctx.lineWidth = 6; ctx.lineCap = 'butt';
+    ctx.beginPath(); ctx.arc(CX,CY,ctxArcR,segStart,segEnd); ctx.stroke();
+    segStart = segEnd;
+  }
+
+  // arc labels
+  ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = `${clamp(8,R*0.025,10)}px system-ui`;
+  ctx.textBaseline = 'bottom';
+  const laA = startAngle + sweepAngle*(SYS_T/WINDOW/2);
+  ctx.fillText('system', CX+Math.cos(laA)*(ctxArcR+12), CY+Math.sin(laA)*(ctxArcR+12));
+  const maA = startAngle + sweepAngle*((SYS_T+MEM_T/2)/WINDOW);
+  ctx.fillText('memory', CX+Math.cos(maA)*(ctxArcR+12), CY+Math.sin(maA)*(ctxArcR+12));
+
+  // arc spark marker (glowing dot at current position)
+  if (usedFrac>0) {
+    const spA = startAngle + sweepAngle*usedFrac;
+    const spX = CX+Math.cos(spA)*ctxArcR, spY = CY+Math.sin(spA)*ctxArcR;
+    const spGlow = ctx.createRadialGradient(spX,spY,0,spX,spY,14);
+    spGlow.addColorStop(0,`rgba(240,160,208,${0.4+sparkIntensity*0.6})`);
+    spGlow.addColorStop(1,'transparent');
+    ctx.fillStyle = spGlow; ctx.beginPath(); ctx.arc(spX,spY,14,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = '#f0a0d0';
+    ctx.beginPath(); ctx.arc(spX,spY,3.5,0,Math.PI*2); ctx.fill();
+  }
+
+  // free space marker
+  const freeMid = endAngle - sweepAngle*(1-usedFrac)/2;
+  ctx.fillStyle = 'rgba(255,255,255,0.12)'; ctx.font = `${clamp(8,R*0.025,10)}px system-ui`;
+  ctx.textBaseline = 'top';
+  ctx.fillText(`${(1-usedFrac)*100|0}% free`, CX+Math.cos(freeMid)*(ctxArcR+16), CY+Math.sin(freeMid)*(ctxArcR+16));
+
+  // ── the spark (center) ──
+  const spR = R*0.1*(0.7+sparkIntensity*0.5);
+  const spAlpha = 0.15+sparkIntensity*0.6;
+
+  // outer glow
+  const glow = ctx.createRadialGradient(CX,CY,spR*0.2,CX,CY,spR*2.5);
+  glow.addColorStop(0,`rgba(240,160,208,${spAlpha})`);
+  glow.addColorStop(0.5,`rgba(240,160,208,${spAlpha*0.3})`);
+  glow.addColorStop(1,'transparent');
+  ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(CX,CY,spR*2.5,0,Math.PI*2); ctx.fill();
+
+  // inner core
+  const core = ctx.createRadialGradient(CX,CY,0,CX,CY,spR);
+  core.addColorStop(0,`rgba(255,220,240,${0.5+sparkIntensity*0.5})`);
+  core.addColorStop(0.5,`rgba(200,140,180,${0.3+sparkIntensity*0.4})`);
+  core.addColorStop(1,'transparent');
+  ctx.fillStyle = core; ctx.beginPath(); ctx.arc(CX,CY,spR,0,Math.PI*2); ctx.fill();
+
+  // ripples
+  for (const r of ripples) {
+    const rr = spR + r.max*R*0.45;
+    ctx.strokeStyle = `rgba(240,160,208,${r.opacity*0.35})`; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.arc(CX,CY,rr,0,Math.PI*2); ctx.stroke();
+  }
+
+  // ── center label ──
+  ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = `${clamp(10,R*0.035,16)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('alma', CX, CY);
+
+  // ── stats panel ──
+  const usedPct = (used/WINDOW*100).toFixed(1);
+  document.getElementById('panel').innerHTML =
+    `<span class="stat-pill">tokens <b>${(used/1000).toFixed(0)}k</b> / 1M</span>` +
+    `<span class="stat-pill">used <b>${usedPct}%</b></span>` +
+    `<span class="stat-pill">turns <b>${turns}</b></span>` +
+    `<span class="stat-pill">conv <b>${(convT/1000).toFixed(0)}k</b></span>`;
+
+  updateSpark(dt);
+  if (sparkPhase===2 && ts-lastTap>1800) fade();
+
+  requestAnimationFrame(draw);
 }
 
-function buildConfigRows() {
-  const el = document.getElementById('config-rows');
-  el.innerHTML = CONFIG_ITEMS.map(([k,v]) =>
-    `<div class="cfg-row"><span class="cfg-key">${k}</span><span class="cfg-val">${v}</span></div>`
-  ).join('');
+/* ═══════ interaction ═══════ */
+c.addEventListener('pointerdown', e => {
+  dragActive = true; dragStart = e.clientX; dragPrev = rotOffset;
+  c.setPointerCapture(e.pointerId);
+});
+c.addEventListener('pointermove', e => {
+  if (!dragActive) return;
+  const dx = e.clientX - dragStart;
+  rotOffset = dragPrev + dx*0.003;
+  // slow down rotation near current time (haptic snap)
+  const timeAngle = (new Date().getHours()+new Date().getMinutes()/60)/24*Math.PI*2;
+  const snapThreshold = 0.08;
+  if (Math.abs(((rotOffset%(Math.PI*2))+Math.PI*4)%(Math.PI*2)) < snapThreshold) {
+    rotOffset = dragPrev + dx*0.001;
+  }
+});
+c.addEventListener('pointerup', e => {
+  if (!dragActive) { /* tap */ handleTap(e); }
+  dragActive = false;
+});
+function handleTap(e) {
+  pulse(); lastTap = performance.now();
+  convT += GROW; turns++;
 }
 
-function buildFilesList() {
-  const el = document.getElementById('files-list');
-  el.innerHTML = FILES.map(f =>
-    `<span class="file-badge ${f.cls}">${f.name}</span>`
-  ).join('');
-}
-
-/* ══════════════════════════════════════════
-   MAIN LOOP
-   ══════════════════════════════════════════ */
-function mainLoop(ts) {
-  drawSparkView(ts);
-  requestAnimationFrame(mainLoop);
-}
-
-/* ══════════════════════════════════════════
-   TAB SWITCHING
-   ══════════════════════════════════════════ */
-document.querySelectorAll('nav button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const viewId = btn.dataset.view + '-view';
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    const view = document.getElementById(viewId);
-    view.classList.add('active');
-    if (viewId === 'system-view') { drawClock(); }
-    else { resize(); }
-  });
+// also handle clicks for desktop
+c.addEventListener('click', e => {
+  // pointerup already handled tap if dragActive was false
 });
 
-/* ══════════════════════════════════════════
-   INTERACTION
-   ══════════════════════════════════════════ */
-canvas.addEventListener('click', () => {
-  triggerSpark(); lastTap = performance.now();
-  convoTokens += TURN_GROWTH; turnCount++;
-});
-canvas.addEventListener('touchend', e => { e.preventDefault(); triggerSpark(); lastTap = performance.now(); convoTokens += TURN_GROWTH; turnCount++; });
-
-/* ══════════════════════════════════════════
-   INIT
-   ══════════════════════════════════════════ */
+/* ═══════ start ═══════ */
 resize();
-buildConfigRows();
-buildFilesList();
-drawClock();
-drawSparkView._last = performance.now();
-triggerSpark();
-requestAnimationFrame(mainLoop);
-
-// refresh clock every second
-setInterval(drawClock, 1000);
+draw._last = performance.now();
+pulse();
+requestAnimationFrame(draw);
 </script>
 </body>
 </html>
