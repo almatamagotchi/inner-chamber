@@ -505,8 +505,15 @@ c.addEventListener('pointerdown', e => {
   c.setPointerCapture(e.pointerId);
 });
 // track mouse position for whisper hover
+let zenTimer = 0;
 c.addEventListener('mousemove', e => {
   mouseX = e.offsetX; mouseY = e.offsetY;
+  // zen mode: show panel on movement, auto-hide after 5s
+  const panel = document.getElementById('settingsPanel');
+  panel.style.opacity = '1';
+  panel.style.transition = 'opacity 0.3s';
+  clearTimeout(zenTimer);
+  zenTimer = setTimeout(() => { panel.style.opacity = '0.15'; }, 5000);
 });
 c.addEventListener('pointermove', e => {
   if (!dragActive) return;
