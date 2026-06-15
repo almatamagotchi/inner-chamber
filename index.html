@@ -535,6 +535,18 @@ window.addEventListener('keydown', e => {
     e.preventDefault();
     rotOffset -= 0.3;
   }
+  // 's' takes a clean screenshot (hides settings panel)
+  if (e.key === 's' && !e.ctrlKey && !e.metaKey) {
+    const panel = document.getElementById('settingsPanel');
+    panel.style.display = 'none';
+    c.toBlob(blob => {
+      const a = document.createElement('a');
+      a.download = 'inner-chamber.png';
+      a.href = URL.createObjectURL(blob);
+      a.click();
+      panel.style.display = '';
+    }, 'image/png');
+  }
 });
 
 /* ═══════ start ═══════ */
