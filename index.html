@@ -75,6 +75,7 @@ const whispers = [
 ];
 let whisperIdx = 0, whisperAlpha = 0, whisperText = '';
 let mouseX = -100, mouseY = -100;
+let whisperParticles = []; // particles spawned on whisper activation
 
 // layer visibility toggles
 const layers = { ghost:true, signals:true, sacred:true, orbits:true };
@@ -428,19 +429,34 @@ function draw(ts) {
   const whisperRange = spR * 4;
   if (hoverDist < whisperRange) {
     whisperAlpha = Math.min(1, whisperAlpha + dt * 4);
-    if (!whisperText) {
-      whisperText = whispers[whisperIdx % whispers.length];
-      whisperIdx++;
-    }
-    // float the text slightly above and offset from cursor direction
+    // compute position first
     const nx = dx / (hoverDist || 1);
     const ny = dy / (hoverDist || 1);
     const tx = CX + nx * whisperRange * 0.4;
     const ty = CY + ny * whisperRange * 0.4 - 20;
+    if (!whisperText) {
+      whisperText = whispers[whisperIdx % whispers.length];
+      whisperIdx++;
+      // spawn particles from whisper position
+      for (let i = 0; i < 6; i++) {
+        whisperParticles.push({
+          x: tx, y: ty,
+          vx: (Math.random() - 0.5) * 30, vy: (Math.random() - 0.8) * 40 - 10,
+          life: 1, size: 2 + Math.random() * 3
+        });
+      }
+      if (whisperParticles.length > 30) whisperParticles.splice(0, whisperParticles.length - 30);
+    }
     ctx.fillStyle = `rgba(200,210,255,${whisperAlpha * 0.65})`;
     ctx.font = `${clamp(9, R*0.028, 14)}px system-ui`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
     ctx.fillText(whisperText, tx, ty);
+
+    // draw whisper particles
+    for (const p of whisperParticles) {
+      ctx.fillStyle = `rgba(180,200,255,${p.life * 0.4})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI*2); ctx.fill();
+    }
   } else {
     whisperAlpha = Math.max(0, whisperAlpha - dt * 3);
     if (whisperAlpha <= 0) whisperText = '';
@@ -469,6 +485,15 @@ function draw(ts) {
     const droneVol = 0.003 + (convT / WINDOW) * 0.005; // subtle swell
     droneOsc.frequency.setTargetAtTime(Math.max(20, droneFreq), audioCtx.currentTime, 0.5);
     droneGain.gain.setTargetAtTime(droneVol, audioCtx.currentTime, 0.8);
+  }
+
+  // whisper particle update
+  for (let i = whisperParticles.length - 1; i >= 0; i--) {
+    const p = whisperParticles[i];
+    p.x += p.vx * dt / 60; p.y += p.vy * dt / 60;
+    p.vy += 0.5 * dt / 60; // gravity
+    p.life -= dt * 2;
+    if (p.life <= 0) whisperParticles.splice(i, 1);
   }
 
   requestAnimationFrame(draw);
