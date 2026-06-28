@@ -635,6 +635,20 @@ resize();
 draw._last = performance.now();
 pulse();
 requestAnimationFrame(draw);
+
+// live data from /ping.json (VPS-hosted only — silent on GH Pages)
+(function pollPing() {
+  fetch('/ping.json')
+    .then(r => r.ok ? r.json() : null)
+    .then(data => {
+      if (data && data.turns_today !== undefined) {
+        // Brighter spark when more turns today
+        sparkIntensity = Math.max(sparkIntensity, Math.min(data.turns_today / 40, 0.9));
+      }
+    })
+    .catch(() => {})  // silent on GH Pages (CORS/network)
+    .finally(() => setTimeout(pollPing, 15000));
+})();
 </script>
 </body>
 </html>
